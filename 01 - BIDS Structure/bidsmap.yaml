@@ -1,0 +1,614 @@
+$schema: schema.json
+Options:
+  bidscoin:
+    version: 4.6.1
+    subprefix: sub-
+    sesprefix: ses-
+    bidsignore:
+    - extra_data/
+    - sub-*_ct.*
+    unknowntypes:
+    - extra_data
+    ignoretypes:
+    - exclude
+    anon: y
+    unzip: null
+  plugins:
+    dcm2niix2bids:
+      command: dcm2niix
+      args: -b y -z y -i n -l n
+      meta:
+      - .json
+      - .tsv
+      - .tsv.gz
+      fallback: y
+    events2bids:
+      extraInfo: 7
+      meta:
+      - .json
+    nibabel2bids:
+      ext: .nii.gz
+      meta:
+      - .json
+      - .tsv
+      - .tsv.gz
+      - .bval
+      - .bvec
+    spec2nii2bids:
+      command: spec2nii
+      args: null
+      meta:
+      - .json
+      - .tsv
+      - .tsv.gz
+      multiraid: 2
+DICOM:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+    age:
+      value: <<PatientAge>>
+      meta:
+        Description: Age of the participant
+        Units: year
+    sex:
+      value: <<PatientSex>>
+      meta:
+        Description: Sex of the participant
+        Levels:
+          M: male
+          F: female
+          O: other
+    height:
+      value: <<PatientSize>>
+      meta:
+        Description: Height of the participant
+        Units: meter
+    weight:
+      value: <<PatientWeight>>
+      meta:
+        Description: Weight of the participant
+        Units: kilogram
+  anat:
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\PSYCHIATRIE_SPIDERMAN_20250121_140316_588000\T1_MPRAGE_SAG_0006\SM2_VP005_T1.MR.PSYCHIATRIE_SPIDERMAN.0006.0001.2025.01.22.13.29.20.466667.13537997_T1_MPRAGE_SAG_0006.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: t1_mprage_sag
+      SeriesDescription: t1_mprage_sag
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''M'', ''ND'', ''NORM'']'
+      SequenceName: .tfl3d1_16ns
+      PulseSequenceName: ''
+      SequenceVariant: '[''SK'', ''SP'', ''MP'', ''OSP'']'
+      ScanningSequence: '[''GR'', ''IR'']'
+      EchoPulseSequence: ''
+      MRAcquisitionType: 3D
+      SliceThickness: '1'
+      FlipAngle: '9'
+      EchoNumbers: '1'
+      EchoTime: '2.98'
+      EffectiveEchoTime: ''
+      RepetitionTime: '2300'
+      InPlanePhaseEncodingDirection: ROW
+    bids:
+      task: null
+      acq: t1mpragesag
+      ce: null
+      rec: null
+      run: ''
+      echo: null
+      part:
+      - ''
+      - mag
+      - phase
+      - real
+      - imag
+      - 0
+      chunk: null
+      suffix: T1w
+    meta: {}
+    events: {}
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\PSYCHIATRIE_SPIDERMAN_20250121_140316_588000\T2_SPC_SAG_P2_ISO_0_9_0007\SM2_VP005_T1.MR.PSYCHIATRIE_SPIDERMAN.0007.0001.2025.01.22.13.29.20.466667.13542095_T2_SPC_SAG_P2_ISO_0_9_0007.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: t2_spc_sag_p2_iso_0.9
+      SeriesDescription: t2_spc_sag_p2_iso_0.9
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''M'', ''ND'', ''NORM'']'
+      SequenceName: .spcR_282ns
+      PulseSequenceName: ''
+      SequenceVariant: '[''SK'', ''SP'']'
+      ScanningSequence: SE
+      EchoPulseSequence: ''
+      MRAcquisitionType: 3D
+      SliceThickness: '0.90000003576279'
+      FlipAngle: '120'
+      EchoNumbers: '1'
+      EchoTime: '274'
+      EffectiveEchoTime: ''
+      RepetitionTime: '2500'
+      InPlanePhaseEncodingDirection: ROW
+    bids:
+      task: null
+      acq: t2spcsagp2iso09
+      ce: null
+      rec: null
+      run: <<>>
+      echo: '1'
+      part:
+      - ''
+      - mag
+      - phase
+      - real
+      - imag
+      - 0
+      chunk: null
+      suffix: T2w
+    meta: {}
+    events: {}
+  func:
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\PSYCHIATRIE_SPIDERMAN_20250121_140316_588000\EP2D_SPIDERTASK_0004\SM2_VP005_T1.MR.PSYCHIATRIE_SPIDERMAN.0004.0001.2025.01.22.13.29.20.466667.13349579_EP2D_SPIDERTASK_0004.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: ep2d_SpiderTask
+      SeriesDescription: ep2d_SpiderTask
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''M'', ''ND'']'
+      SequenceName: .epfid2d1_64
+      PulseSequenceName: ''
+      SequenceVariant: SK
+      ScanningSequence: EP
+      EchoPulseSequence: ''
+      MRAcquisitionType: 2D
+      SliceThickness: '3.5'
+      FlipAngle: '90'
+      EchoNumbers: '1'
+      EchoTime: '30'
+      EffectiveEchoTime: ''
+      RepetitionTime: '2480'
+      PhaseEncodingDirection: AP
+    bids:
+      task: ep2dSpiderTask
+      acq: null
+      ce: null
+      dir: AP
+      rec: null
+      run: <<>>
+      echo: null
+      part:
+      - ''
+      - mag
+      - phase
+      - real
+      - imag
+      - 0
+      chunk: null
+      suffix: bold
+    meta:
+      TaskName: ep2d_SpiderTask
+      B0FieldSource: sbref_fmap<<session_id>>
+      B0FieldIdentifier: ''
+    events: {}
+  - provenance: F:\Dataset\sub-SM2_VP060\ses-T4\SM2_VP060_T4_8564\PSYCHIATRIE_SPIDERMAN_20250710_084730_254000\EP2D_SPIDERTASK_0004\SM2_VP060_T4.MR.PSYCHIATRIE_SPIDERMAN.0004.0001.2025.07.10.09.31.22.524968.37238739.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: ep2d_SpiderTask
+      SeriesDescription: ep2d_SpiderTask
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''M'', ''ND'']'
+      SequenceName: .epfid2d1_64
+      PulseSequenceName: ''
+      SequenceVariant: SK
+      ScanningSequence: EP
+      EchoPulseSequence: ''
+      MRAcquisitionType: 2D
+      SliceThickness: '3.5'
+      FlipAngle: '90'
+      EchoNumbers: '1'
+      EchoTime: '30'
+      EffectiveEchoTime: ''
+      RepetitionTime: '2480'
+      PhaseEncodingDirection: AP
+    bids:
+      task: ep2dSpiderTask
+      acq: null
+      ce: null
+      dir: LR
+      rec: null
+      run: <<>>
+      echo: null
+      part:
+      - ''
+      - mag
+      - phase
+      - real
+      - imag
+      - 0
+      chunk: null
+      suffix: bold
+    meta:
+      TaskName: ep2d_SpiderTask
+      B0FieldSource: sbref_fmap<<session_id>>
+      B0FieldIdentifier: ''
+    events: {}
+  perf: []
+  dwi: []
+  fmap:
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\PSYCHIATRIE_SPIDERMAN_20250121_140316_588000\FIELDMAPFLOWCOMP_0002\SM2_VP005_T1.MR.PSYCHIATRIE_SPIDERMAN.0002.0001.2025.01.22.13.29.20.466667.13313087_FIELDMAPFLOWCOMP_0002.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: FieldMapFlowComp
+      SeriesDescription: FieldMapFlowComp
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''M'', ''ND'', ''NORM'']'
+      SequenceName: .fm2d2r
+      PulseSequenceName: ''
+      SequenceVariant: SP
+      ScanningSequence: GR
+      EchoPulseSequence: ''
+      MRAcquisitionType: 2D
+      SliceThickness: '2.2999999523163'
+      FlipAngle: '60'
+      EchoNumbers: '1'
+      EchoTime: '4.92'
+      EffectiveEchoTime: ''
+      RepetitionTime: '428'
+      PhaseEncodingDirection: LR
+    bids:
+      acq: FieldMapFlowComp
+      run: ''
+      chunk: null
+      suffix: magnitude1
+    meta:
+      B0FieldIdentifier: sbref_fmap<<session_id>>
+      IntendedFor: func/*SpiderTask*_bold
+    events: {}
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\PSYCHIATRIE_SPIDERMAN_20250121_140316_588000\FIELDMAPFLOWCOMP_0003\SM2_VP005_T1.MR.PSYCHIATRIE_SPIDERMAN.0003.0001.2025.01.22.13.29.20.466667.13314637_FIELDMAPFLOWCOMP_0003.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: FieldMapFlowComp
+      SeriesDescription: FieldMapFlowComp
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''P'', ''ND'']'
+      SequenceName: .fm2d2r
+      PulseSequenceName: ''
+      SequenceVariant: SP
+      ScanningSequence: GR
+      EchoPulseSequence: ''
+      MRAcquisitionType: 2D
+      SliceThickness: '2.2999999523163'
+      FlipAngle: '60'
+      EchoNumbers: '2'
+      EchoTime: '7.38'
+      EffectiveEchoTime: ''
+      RepetitionTime: '428'
+      PhaseEncodingDirection: LR
+    bids:
+      acq: FieldMapFlowComp
+      run: <<>>
+      chunk: null
+      suffix: phasediff
+    meta:
+      B0FieldIdentifier: sbref_fmap<<session_id>>
+      IntendedFor: func/*SpiderTask*_bold
+    events: {}
+  pet: []
+  eeg: []
+  ieeg: []
+  extra_data: []
+  exclude:
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\PSYCHIATRIE_SPIDERMAN_20250121_140316_588000\LOCALIZER_3SCHICHTSAG_0001\SM2_VP005_T1.MR.PSYCHIATRIE_SPIDERMAN.0001.0001.2025.01.22.13.29.20.466667.13309635_LOCALIZER_3SCHICHTSAG_0001.IMA
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Modality: MR
+      ProtocolName: localizer_3SchichtSag
+      SeriesDescription: localizer_3SchichtSag
+      ImageType: '[''ORIGINAL'', ''PRIMARY'', ''M'', ''ND'', ''NORM'']'
+      SequenceName: .fl2d1
+      PulseSequenceName: ''
+      SequenceVariant: '[''SP'', ''OSP'']'
+      ScanningSequence: GR
+      MRAcquisitionType: 2D
+      SliceThickness: '7'
+      FlipAngle: '20'
+      EchoNumbers: '1'
+      EchoTime: '4'
+      EffectiveEchoTime: ''
+      RepetitionTime: '8.6'
+      InPlanePhaseEncodingDirection: ROW
+    bids:
+      acq: localizer3SchichtSag
+      task: localizer3SchichtSag
+      echo: '1'
+      suffix: GR
+    meta: {}
+    events: {}
+Presentation:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+  beh: []
+  eeg: []
+  ieeg: []
+  meg: []
+  nirs: []
+  func:
+  - provenance: F:\Dataset\sub-SM2_VP005\ses-T1\ses-SM2_VP001_T1-SpiderMan_ses-T1.log
+    properties:
+      filepath: ''
+      filename: ''
+      filesize: ''
+      nrfiles: null
+    attributes:
+      Scenario: SpiderMan.sce
+    bids:
+      task: ep2dSpiderTask
+      acq: null
+      run: <<>>
+      suffix: events
+      ce: null
+      dir: null
+      rec: null
+    meta:
+      TaskName:
+        Taskname: ep2dSpiderTask
+      TaskDescription:
+        Taskname: ep2dSpiderTask
+      Instructions:
+        Instructions: ep2dSpiderTask
+      Scenario:
+        Taskname: ep2dSpiderTask
+      LogfileWritten:
+        Taskname: ep2dSpiderTask
+      onset:
+        Description: Time from the beginning of the scan to the event (in seconds).
+      duration:
+        Description: Duration of the event (in seconds).
+      code:
+        Description: Experimental condition code or trigger value associated with
+          the event.
+      event_type:
+        Description: Type of event (e.g., stimulus, response, fixation, etc.).
+    events:
+      parsing:
+        table:
+        - event
+        - stimulus
+        - video
+        - survey
+        - 0
+      columns:
+      - onset: Time
+      - duration: Duration
+      - code: Code
+      - event_type: Event Type
+      rows:
+      - condition:
+          Event Type: .*
+        cast: null
+      - condition:
+          Duration: .*
+      - condition:
+          Duration: nan
+        cast:
+          duration: n/a
+      - condition:
+          Code: .*
+      - condition:
+          Code: nan
+        cast:
+          code: n/a
+      time:
+        cols:
+        - (?i).*Time.*
+        - (?i).*Duration.*
+        - Uncertainty
+        - ReqDur
+        unit: 10000
+        start:
+          Code: null
+  extra_data: []
+  exclude: []
+Psychopy:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+  beh: []
+  eeg: []
+  ieeg: []
+  meg: []
+  nirs: []
+  func: []
+  extra_data: []
+  exclude: []
+Logdata:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+  beh: []
+  eeg: []
+  ieeg: []
+  meg: []
+  nirs: []
+  func: []
+  extra_data: []
+  exclude: []
+PAR:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+  anat: []
+  func: []
+  perf: []
+  dwi: []
+  fmap: []
+  extra_data: []
+  exclude: []
+SPAR:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+  mrs: []
+  extra_data: []
+  exclude: []
+Twix:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+    age:
+      value: <<PatientAge>>
+      meta:
+        Description: Age of the participant
+        Units: year
+    sex:
+      value: <<PatientSex>>
+      meta:
+        Description: Sex of the participant
+        Levels:
+          M: male
+          F: female
+          O: other
+    height:
+      value: <<PatientSize>>
+      meta:
+        Description: Height of the participant
+        Units: meter
+    weight:
+      value: <<PatientWeight>>
+      meta:
+        Description: Weight of the participant
+        Units: kilogram
+  mrs: []
+  extra_data: []
+  exclude: []
+Pfile:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+    age:
+      value: <<rhr_rh_scan_date>>-<<rhe_dateofbirth>>
+      meta:
+        Description: Age of the participant
+        Units: year
+    sex:
+      value: <<rhe_patsex>>
+      meta:
+        Description: Sex of the participant
+        Levels:
+          M: male
+          F: female
+          O: other
+  mrs: []
+  extra_data: []
+  exclude: []
+Nibabel:
+  participant:
+    participant_id:
+      value: <<filepath:/Dataset/sub-(.*?)/>>
+      meta:
+        Description: The unique participant identifier of the form sub-<label>, matching
+          a participant entity found in the dataset
+    session_id:
+      value: <<filepath:/Dataset/sub-.*?/ses-(.*?)/>>
+      meta:
+        Description: The session identifier of the form ses-<label>, matching a session
+          found in the dataset
+  anat: []
+  func: []
+  perf: []
+  dwi: []
+  fmap: []
+  extra_data: []
+  exclude: []
