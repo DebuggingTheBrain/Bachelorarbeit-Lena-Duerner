@@ -30,7 +30,7 @@ Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren,
 ![Infografik Pipeline](images/Infografik%20Pipeline.png)
 
 
---
+---
 
 
 ## Inhaltsverzeichnis
