@@ -1,6 +1,6 @@
-# Bachelorarbeit 
+# Bachelorarbeit /  Störung der Furchtrekonsolidierung mittels rTMS zurBeeinflussung des Furchtgedächtnisses
 
-Willkommen auf dem offiziellen Repository meiner Bachelorarbeit im Studiengang **[Dein Studiengang]** an der **[Deine Universität]**.
+Willkommen auf dem offiziellen Repository meiner Bachelorarbeit im Studiengang **B.Sc. Psychologie** an der **[Hamburger Fern-Hochschule]**.
 
 In dieser Arbeit beschäftige ich mich mit dem Thema  
 **[kurze Beschreibung des Themas, z.B. „Entwicklung eines Machine-Learning-Modells zur Vorhersage von XYZ“]**.  
