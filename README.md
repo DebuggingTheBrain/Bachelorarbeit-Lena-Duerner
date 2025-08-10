@@ -24,6 +24,14 @@ In diesem Projekt wurden unter anderem folgende Technologien eingesetzt:
 `Python` · `TensorFlow` · `Docker` · `Jupyter Notebooks`  
 *(Bitte hier deine Technologien anpassen)*
 
+
+
+## hier ein Beispielskirpt
+
+[Smoothing Script](
+
+
+
 ---
 
 ## Lizenz
