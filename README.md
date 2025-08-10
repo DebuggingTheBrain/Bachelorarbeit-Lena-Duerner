@@ -15,9 +15,9 @@ Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren,
 ## Inhalt des Repositories
 
 
-- [01 - BIDS Structure](./01%20-%20BIDS%20Structure):                   Skripte und Vorgehensweisen die zur Konvertierung in das BIDS Format verwendet wurden  
-- [02 - fMRIPrep Preprocessing](./02%20-%20fMRIPrep%20Preprocessing):   Skript zur Ausführung von fMRIPrep
-- [03 - Postprocessing](./03%20-%20Postprocessing):                     Smoothing und andere Maßnahmen vor der Analyse
+- [01 - BIDS Structure](./01%20-%20BIDS%20Structure): Skripte und Vorgehensweisen die zur Konvertierung in das BIDS Format verwendet wurden  
+- [02 - fMRIPrep Preprocessing](./02%20-%20fMRIPrep%20Preprocessing): Skript zur Ausführung von fMRIPrep
+- [03 - Postprocessing](./03%20-%20Postprocessing): Smoothing und andere Maßnahmen vor der Analyse
 - [04 - SPM Analysis](./04%20-%20SPM%20Analysis): Skripte zur First Level Analysis und Second Level Analysis in SPM
 - [05 - TFCE Toolbox](./05%20-%20TFCE%20Toolbox): Skripte zur Korrektur der Ergebnisse mit TFCE
 - [06 - TMFC Toolbox](./06%20-%20TMFC%20Toolbox): Informationen und Skripte zur gPPI mit der SPM-basierten Toolbox TMFC
