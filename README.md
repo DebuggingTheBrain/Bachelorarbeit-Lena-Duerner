@@ -28,7 +28,7 @@ In diesem Projekt wurden unter anderem folgende Technologien eingesetzt:
 
 ## hier ein Beispielskirpt
 
-[Smoothing Script](
+[Smoothing Script](Bachelorarbeit-Lena-D-rner/03%20-%20Postprocessing/smoothing_scriptneu.m)
 
 
 
