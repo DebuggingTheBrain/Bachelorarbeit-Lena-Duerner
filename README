@@ -1,15 +1,39 @@
-Bachelorarbeit – [Titel deiner Arbeit]
-Willkommen auf dem offiziellen Repository meiner Bachelorarbeit im Studiengang [Dein Studiengang] an der [Deine Universität].
+# Bachelorarbeit – [Titel deiner Arbeit]
 
-In dieser Arbeit beschäftige ich mich mit dem Thema [kurze Beschreibung des Themas, z.B. „Entwicklung eines Machine-Learning-Modells zur Vorhersage von XYZ“]. Ziel der Arbeit ist es, [kurze Zielsetzung, z.B. „ein effizientes und skalierbares System zu entwickeln, das die Genauigkeit von Vorhersagen verbessert und praktische Anwendungsfälle unterstützt.“]
+Willkommen auf dem offiziellen Repository meiner Bachelorarbeit im Studiengang **[Dein Studiengang]** an der **[Deine Universität]**.
 
-Inhalt des Repositories
-Dokumentation: Die vollständige Arbeit als PDF
+In dieser Arbeit beschäftige ich mich mit dem Thema  
+**[kurze Beschreibung des Themas, z.B. „Entwicklung eines Machine-Learning-Modells zur Vorhersage von XYZ“]**.  
+Ziel der Arbeit ist es,  
+*[kurze Zielsetzung, z.B. „ein effizientes und skalierbares System zu entwickeln, das die Genauigkeit von Vorhersagen verbessert und praktische Anwendungsfälle unterstützt.“]*
 
-Quellcode: Implementierung der entwickelten Modelle/Algorithmen/Software
+---
 
-Daten: Datensätze, die für die Analyse verwendet wurden (sofern erlaubt)
+## Inhalt des Repositories
 
-Anleitungen: Installations- und Nutzungshinweise zur Reproduktion der Ergebnisse
+- **Dokumentation:** Die vollständige Arbeit als PDF  
+- **Quellcode:** Implementierung der entwickelten Modelle/Algorithmen/Software  
+- **Daten:** Datensätze, die für die Analyse verwendet wurden (sofern erlaubt)  
+- **Anleitungen:** Installations- und Nutzungshinweise zur Reproduktion der Ergebnisse  
 
-Technologien
+---
+
+## Technologien
+
+In diesem Projekt wurden unter anderem folgende Technologien eingesetzt:  
+`Python` · `TensorFlow` · `Docker` · `Jupyter Notebooks`  
+*(Bitte hier deine Technologien anpassen)*
+
+---
+
+## Lizenz
+
+Dieses Projekt steht unter der **[Lizenzname, z.B. MIT-Lizenz]**. Details sind in der LICENSE-Datei zu finden.
+
+---
+
+Ich freue mich über Feedback, Anregungen oder Fragen!
+
+---
+
+*Viel Erfolg mit deiner Bachelorarbeit!*  
