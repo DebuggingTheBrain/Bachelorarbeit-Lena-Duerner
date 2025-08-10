@@ -27,7 +27,7 @@ Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren,
 
 ## Pipeline zur Auswertung 
 
-![Infografik Pipeline](Bachelorarbeit-Lena-D-rner/images/Infografik%20Pipeline.png)
+![Infografik Pipeline](images/Infografik%20Pipeline.png)
 
 
 
