@@ -1,4 +1,4 @@
-# Bachelorarbeit /  Störung der Furchtrekonsolidierung mittels rTMS zur Beeinflussung des Furchtgedächtnisses
+# Bachelorarbeit - Störung der Furchtrekonsolidierung mittels rTMS zur Beeinflussung des Furchtgedächtnisses
 
 Willkommen auf dem offiziellen Repository meiner Bachelorarbeit im Studiengang **B.Sc. Psychologie** an der **Hamburger Fern-Hochschule**.
 
