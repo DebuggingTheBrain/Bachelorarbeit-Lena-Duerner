@@ -30,25 +30,15 @@ Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren,
 ![Infografik Pipeline](images/Infografik%20Pipeline.png)
 
 
+--
 
 
-## hier ein Beispielskirpt
+## Inhaltsverzeichnis
 
 [Smoothing Script](03%20-%20Postprocessing/smoothing_scriptneu.m)
 
 
 
 
----
 
-## Lizenz
 
-Dieses Projekt steht unter der **[Lizenzname, z.B. MIT-Lizenz]**. Details sind in der LICENSE-Datei zu finden.
-
----
-
-Ich freue mich über Feedback, Anregungen oder Fragen!
-
----
-
-*Viel Erfolg mit deiner Bachelorarbeit!*  
