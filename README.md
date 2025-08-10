@@ -25,11 +25,10 @@ Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren,
 
 ---
 
-## Technologien
+## Pipeline zur Auswertung 
 
-In diesem Projekt wurden unter anderem folgende Technologien eingesetzt:  
-`Python` · `TensorFlow` · `Docker` · `Jupyter Notebooks`  
-*(Bitte hier deine Technologien anpassen)*
+![Infografik Pipeline](Bachelorarbeit-Lena-D-rner/images/Infografik%20Pipeline.png)
+
 
 
 
