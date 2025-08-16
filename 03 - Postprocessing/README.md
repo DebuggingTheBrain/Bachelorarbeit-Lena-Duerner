@@ -2,5 +2,8 @@ Vor und nach dem Preprocessing sind mehrere Schritte zur Überprüfung der Daten
 Dazu zählen 
 1. die zusätzliche Überprüfung der Datenqualität mit [MRIQC](https://mriqc.readthedocs.io/en/latest/)
 2. die ergänzende Berechnung der FD und DVARS der mit FMRIPrep preprocessed Data durch eigene Skripte
-3. die Entfernung der ersten 5 Volumes
-4. sowie das Smoothing als ergänzenden Schritt des Preprocessings
+3. das Teilen der onset Dateien in zwei verschiedene Teile
+4. das Überprüfen der Aufmerksamkeit der Probanden
+5. die Umwandlung der onset Skripte für SPM - unter Berücksichtigung der 5 entfernten Volumes
+6. die Entfernung der ersten 5 Volumes
+7. sowie das Smoothing als ergänzenden Schritt des Preprocessings
