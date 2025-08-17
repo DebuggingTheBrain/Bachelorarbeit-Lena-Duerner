@@ -1,0 +1,544 @@
+# QC über fMRIPrep-Confounds (R / tidyverse)
+# - 3 Klassen (OK / Kritisch / Ausschließen) nach Frame-Outliern (FD/DVARS)
+# - Flagging in FD95/DVARS95-Balkenplots + Mittelwert-Punkte
+# - Mittelwert-Plots (FD/DVARS)
+# - Kombiniertes FD&DVARS (p95) mit Mean-Punkten
+# - Block-Analyse: max. aufeinanderfolgende „bad“ TRs (konfigurierbar)
+# - Events-Überlappung: % bad/TR pro Block + Timelines mit Block-Hinterlegung
+# - Alle Outputs in out_dir
+
+library(tidyverse)
+library(readr)
+library(stringr)
+
+# === Einstellungen ===
+root_dir        <- "F:/FMRIPREPRESULTFINAL"          # Wurzelordner
+out_dir         <- file.path(root_dir, "_qc_plots")  # Output-Ordner
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+fd_cut          <- 0.20   # Frame-Cutoff FD (mm)
+dvars_cut       <- 2.0    # Frame-Cutoff DVARS (vstd/std)
+fd_mean_cut     <- 0.20   # Mean-Cutoff FD (mm)
+dvars_mean_cut  <- 2.0    # Mean-Cutoff DVARS
+TR_sec          <- 2.3    # TR deines Paradigmas (Sek.)
+crit_seconds    <- 15     # „kritische“ Ausreißer-Blocklänge in Sekunden
+K_block         <- ceiling(crit_seconds / TR_sec)  # Mindestlänge zusammenhängender bad-TRs
+message("Kritischer Streak: K = ", K_block, " TRs (", round(K_block*TR_sec,1), " s)")
+
+# === Hilfsfunktionen ===
+parse_bids <- function(path) {
+  fname <- basename(path)
+  tibble(
+    file = path,
+    sub  = str_match(fname, "sub-([A-Za-z0-9]+)")[,2],
+    ses  = str_match(fname, "ses-([A-Za-z0-9]+)")[,2],
+    task = str_match(fname, "task-([A-Za-z0-9]+)")[,2],
+    run  = str_match(fname, "run-([A-Za-z0-9]+)")[,2],
+    dir  = str_match(fname, "dir-([A-Za-z0-9]+)")[,2]
+  )
+}
+
+safe_quantile <- function(x, p) {
+  x <- suppressWarnings(as.numeric(x))
+  if (all(is.na(x))) return(NA_real_)
+  as.numeric(quantile(x, p, na.rm = TRUE, names = FALSE))
+}
+safe_mean   <- function(x) { x <- suppressWarnings(as.numeric(x)); if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE) }
+safe_median <- function(x) { x <- suppressWarnings(as.numeric(x)); if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE) }
+safe_pct_gt <- function(x, cut) {
+  x <- suppressWarnings(as.numeric(x))
+  if (all(is.na(x))) return(NA_real_)
+  mean(x > cut, na.rm = TRUE) * 100
+}
+
+# Confounds einlesen
+read_confounds <- function(path) {
+  df <- read_tsv(
+    path,
+    na = c("n/a", "NA", "NaN", "Inf", "-Inf"),
+    show_col_types = FALSE,
+    progress = FALSE
+  )
+  if (!"timepoint" %in% names(df)) df <- df %>% mutate(timepoint = row_number())
+  num_cols <- intersect(c("framewise_displacement", "dvars_vstd", "std_dvars", "dvars"), names(df))
+  df %>% mutate(across(all_of(num_cols), ~ suppressWarnings(as.numeric(.x))))
+}
+
+choose_dvars_col <- function(df) {
+  if ("dvars_vstd" %in% names(df)) return("dvars_vstd")
+  if ("std_dvars"  %in% names(df)) return("std_dvars")
+  if ("dvars"      %in% names(df)) return("dvars")
+  NA_character_
+}
+
+sum_outliers <- function(df) {
+  mcols <- names(df)[str_detect(names(df), "^motion_outlier\\d+$")]
+  if (length(mcols) == 0) return(0L)
+  df %>%
+    select(all_of(mcols)) %>%
+    mutate(across(everything(), ~replace_na(suppressWarnings(as.numeric(.)), 0))) %>%
+    rowSums() %>% sum(na.rm = TRUE)
+}
+
+# 3 Kategorien nach Anteil auffälliger Frames
+classify_pct <- function(p) {
+  case_when(
+    is.na(p) ~ NA_character_,
+    p < 5    ~ "OK (<5%)",
+    p <= 40  ~ "Kritisch (5–40%)",
+    p > 40   ~ "Ausschließen (>40%)"
+  )
+}
+
+# ==== Events finden (nur *_events.*) ====
+guess_events_path <- function(conf_path) {
+  d <- dirname(conf_path)
+  b <- basename(conf_path)
+  # 1) BIDS-Standard: ..._events.tsv
+  p1 <- file.path(d, sub("_desc-confounds_timeseries\\.tsv(\\.gz)?$", "_events.tsv", b, perl = TRUE))
+  if (file.exists(p1)) return(p1)
+  # 2) sonst nur Dateien mit "events" im Namen (tsv/txt/log)
+  cands <- list.files(d, pattern = "events\\.(tsv|txt|log)$", full.names = TRUE, ignore.case = TRUE)
+  if (length(cands) >= 1) return(cands[1])
+  return(NA_character_)
+}
+
+# ==== Events robust einlesen & Spalten heuristisch finden ====
+read_events_generic <- function(path) {
+  if (is.na(path) || !file.exists(path)) return(NULL)
+
+  df <- suppressWarnings(tryCatch(
+    readr::read_tsv(path, na = c("n/a","NA","NaN","Inf","-Inf"), show_col_types = FALSE),
+    error = function(e) NULL
+  ))
+  if (is.null(df)) df <- suppressWarnings(tryCatch(
+    readr::read_delim(path, delim = " ", na = c("n/a","NA","NaN","Inf","-Inf"),
+                      show_col_types = FALSE, trim_ws = TRUE),
+    error = function(e) NULL
+  ))
+  if (is.null(df)) df <- suppressWarnings(tryCatch(
+    readr::read_csv(path, na = c("n/a","NA","NaN","Inf","-Inf"), show_col_types = FALSE),
+    error = function(e) NULL
+  ))
+  if (is.null(df) || nrow(df) == 0) return(NULL)
+
+  names(df) <- tolower(gsub("[^a-z0-9]+", "_", names(df)))
+
+  first_col <- function(cands) {
+    cands <- unique(cands)
+    for (nm in cands) if (nm %in% names(df)) return(nm)
+    idx <- which(stringr::str_detect(names(df), paste0("\\b(", paste(cands, collapse="|"), ")\\b")))
+    if (length(idx) > 0) return(names(df)[idx[1]])
+    NA_character_
+  }
+
+  onset_cands    <- c("onset","onset_s","onset_sec","onset_seconds","onset_time","onsettime",
+                      "start","start_time","starttime","stim_onset","pictureonset",
+                      "trial_onset","time","stime","t_onset")
+  duration_cands <- c("duration","dur","duration_s","duration_sec","durationms","stim_dur",
+                      "stimulus_duration","trial_duration","len","length","dur_s")
+  block_cands    <- c("block","block_id","blocknr","block_nr","blocknum","blockno","blk","run_block")
+  type_cands     <- c("trial_type","condition","cond","category","stim_type","stimulus","label")
+
+  onset_col    <- first_col(onset_cands)
+  duration_col <- first_col(duration_cands)
+  block_col    <- first_col(block_cands)
+  type_col     <- first_col(type_cands)
+
+  if (is.na(onset_col)) return(NULL)
+
+  onset <- suppressWarnings(as.numeric(df[[onset_col]]))
+  if (all(is.na(onset))) return(NULL)
+  if (max(onset, na.rm = TRUE) > 1000) onset <- onset / 1000  # ms -> s
+
+  if (!is.na(duration_col)) {
+    duration <- suppressWarnings(as.numeric(df[[duration_col]]))
+    if (max(duration, na.rm = TRUE) > 1000) duration <- duration / 1000
+  } else {
+    duration <- rep(NA_real_, length(onset))
+  }
+
+  if (any(is.na(duration) | duration <= 0)) {
+    est <- c(diff(onset), NA_real_)
+    med_est <- suppressWarnings(stats::median(est[is.finite(est) & est > 0], na.rm = TRUE))
+    if (!is.finite(med_est)) med_est <- 1
+    est[is.na(est) | est <= 0] <- med_est
+    duration[is.na(duration) | duration <= 0] <- est[is.na(duration) | duration <= 0]
+  }
+
+  trial_type <- if (!is.na(type_col)) as.character(df[[type_col]]) else NA_character_
+  block      <- if (!is.na(block_col)) suppressWarnings(as.integer(df[[block_col]])) else {
+    ceiling(seq_along(onset) / 10)  # Fallback: 10 Bilder/Block
+  }
+
+  out <- tibble(
+    onset = onset,
+    duration = duration,
+    trial_type = trial_type,
+    block = block
+  ) %>%
+    filter(!is.na(onset), !is.na(duration), !is.na(block)) %>%
+    arrange(onset)
+
+  if (nrow(out) == 0) return(NULL)
+  out
+}
+
+# ==== TR-Indizes aus (onset,duration) – begrenzt auf 1..n_trs ====
+event_to_tr_idx <- function(onset, duration, TR, n_trs) {
+  if (!is.finite(onset) || !is.finite(duration) || duration <= 0 || !is.finite(TR) || TR <= 0) {
+    return(integer(0))
+  }
+  start_tr <- floor(onset / TR) + 1L
+  end_tr   <- ceiling((onset + duration) / TR)
+  start_tr <- max(1L, start_tr)
+  end_tr   <- max(start_tr, end_tr)
+  end_tr   <- min(as.integer(n_trs), as.integer(end_tr))
+  if (start_tr > end_tr) return(integer(0))
+  seq.int(start_tr, end_tr)
+}
+
+# === Dateien finden ===
+files_tsv <- list.files(
+  root_dir,
+  pattern = "desc-confounds_timeseries\\.tsv(\\.gz)?$",
+  recursive = TRUE,
+  full.names = TRUE
+)
+stopifnot(length(files_tsv) > 0)
+meta <- map_dfr(files_tsv, parse_bids)
+
+# === Einlesen & Outlier-Statistiken + Streak-Analyse ===
+all_runs <- pmap_dfr(list(meta$file, meta$sub, meta$ses, meta$task, meta$run, meta$dir),
+  function(f, sub, ses, task, run, dir) {
+    df <- read_confounds(f)
+
+    if (!"framewise_displacement" %in% names(df)) df$framewise_displacement <- NA_real_
+    dvars_col <- choose_dvars_col(df)
+    df$.__dvars <- if (is.na(dvars_col)) NA_real_ else df[[dvars_col]]
+
+    fd_flag    <- suppressWarnings(as.numeric(df$framewise_displacement) > fd_cut)
+    dvars_flag <- suppressWarnings(as.numeric(df$.__dvars) > dvars_cut)
+    fd_flag[is.na(fd_flag)]       <- FALSE
+    dvars_flag[is.na(dvars_flag)] <- FALSE
+    combo_flag <- fd_flag | dvars_flag
+
+    pct_flagged <- if (length(combo_flag) == 0) NA_real_ else mean(combo_flag) * 100
+
+    r  <- rle(combo_flag)
+    bad_lengths <- if (length(r$lengths) > 0) r$lengths[r$values] else integer(0)
+    max_streak  <- ifelse(length(bad_lengths) == 0, 0L, max(bad_lengths))
+    n_geK       <- sum(bad_lengths >= K_block)
+    has_geK     <- max_streak >= K_block
+
+    tibble(
+      file = f,
+      sub  = sub, ses = ses, task = task, run = run, dir = dir,
+      n_vols       = nrow(df),
+      fd_mean      = safe_mean(df$framewise_displacement),
+      fd_median    = safe_median(df$framewise_displacement),
+      fd_p95       = safe_quantile(df$framewise_displacement, 0.95),
+      fd_pct_gt    = safe_pct_gt(df$framewise_displacement, fd_cut),
+      dvars_col    = dvars_col,
+      dvars_mean   = safe_mean(df$.__dvars),
+      dvars_median = safe_median(df$.__dvars),
+      dvars_p95    = safe_quantile(df$.__dvars, 0.95),
+      dvars_pct_gt = safe_pct_gt(df$.__dvars, dvars_cut),
+      pct_flagged  = pct_flagged,
+      category     = classify_pct(pct_flagged),
+      motion_outliers = sum_outliers(df),
+      max_streak_bad = max_streak,
+      n_clusters_geK = n_geK,
+      has_block_geK  = has_geK
+    )
+  })
+
+# Zusatz-Klassifikation (Mean)
+all_runs <- all_runs %>%
+  mutate(
+    category_mean = case_when(
+      is.na(fd_mean) & is.na(dvars_mean)                  ~ NA_character_,
+      fd_mean > fd_mean_cut | dvars_mean > dvars_mean_cut ~ "Kritisch (Mean)",
+      TRUE                                                ~ "OK (Mean)"
+    )
+  )
+
+# Übersicht speichern
+write_csv(all_runs, file.path(out_dir, "qc_summary_fmriprep_confounds.csv"))
+message("QC-Übersicht gespeichert: ", file.path(out_dir, "qc_summary_fmriprep_confounds.csv"))
+
+# === Plots ===
+lab_run <- function(df) {
+  df %>% mutate(run_label = paste0(
+    "sub-", sub,
+    ifelse(is.na(ses)  | ses  == "", "", paste0("_ses-", ses)),
+    ifelse(is.na(task) | task == "", "", paste0("_task-", task)),
+    ifelse(is.na(run)  | run  == "", "", paste0("_run-", run)),
+    ifelse(is.na(dir)  | dir  == "", "", paste0("_dir-", dir))
+  ))
+}
+plot_df <- lab_run(all_runs) %>%
+  mutate(
+    flag_fd95    = !is.na(fd_p95)    & fd_p95    > fd_cut,
+    flag_dvars95 = !is.na(dvars_p95) & dvars_p95 > dvars_cut
+  )
+
+# FD 95 + Mean-Punkt + Flag
+p_fd <- ggplot(plot_df, aes(reorder(run_label, fd_p95), fd_p95, fill = flag_fd95)) +
+  geom_col() +
+  geom_point(aes(y = fd_mean), shape = 21, color = "black", fill = "white", size = 1.8, stroke = 0.6) +
+  geom_hline(yintercept = fd_cut, linetype = "dashed") +
+  coord_flip() +
+  labs(title = "FD 95. Perzentil pro Run", subtitle = "Punkt = FD-Mittelwert",
+       x = "Run", y = "FD (mm)", fill = paste0("Flag (FD95 > ", fd_cut, " mm)")) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(`FALSE` = "grey70", `TRUE` = "firebrick"))
+ggsave(file.path(out_dir, "qc_plot_fd_p95_per_run.png"), p_fd,
+       width = 11, height = 8, dpi = 150, device = "png")
+
+# DVARS 95 + Mean-Punkt + Flag
+p_dvars <- ggplot(plot_df, aes(reorder(run_label, dvars_p95), dvars_p95, fill = flag_dvars95)) +
+  geom_col() +
+  geom_point(aes(y = dvars_mean), shape = 21, color = "black", fill = "white", size = 1.8, stroke = 0.6) +
+  geom_hline(yintercept = dvars_cut, linetype = "dashed") +
+  coord_flip() +
+  labs(title = "DVARS (vstd/std) 95. Perzentil pro Run",
+       subtitle = "Punkt = DVARS-Mittelwert (Fallback: dvars_vstd > std_dvars > dvars)",
+       x = "Run", y = "DVARS", fill = paste0("Flag (DVARS95 > ", dvars_cut, ")")) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(`FALSE` = "grey70", `TRUE` = "firebrick"))
+ggsave(file.path(out_dir, "qc_plot_dvars_p95_per_run.png"), p_dvars,
+       width = 11, height = 8, dpi = 150, device = "png")
+
+# % auffälliger Frames
+p_flag <- ggplot(plot_df, aes(reorder(run_label, pct_flagged), pct_flagged, fill = category)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Anteil auffälliger Frames pro Run",
+       subtitle = paste0("Regel: FD >", fd_cut, " mm ODER DVARS >", dvars_cut),
+       x = "Run", y = "% Frames", fill = "Kategorie (Outlier)") +
+  theme_minimal(base_size = 12)
+ggsave(file.path(out_dir, "qc_plot_pct_flagged_per_run.png"), p_flag,
+       width = 12, height = 8, dpi = 150, device = "png")
+
+# Scatter FD vs DVARS (Median)
+p_fd_dvars_sub <- ggplot(plot_df, aes(x = fd_median, y = dvars_median, color = category)) +
+  geom_point() +
+  geom_hline(yintercept = dvars_cut, linetype = "dashed") +
+  geom_vline(xintercept = fd_cut, linetype = "dashed") +
+  facet_wrap(~ sub, scales = "free") +
+  labs(title = "QC-Streudiagramm pro Subject (FD vs. DVARS)",
+       x = "FD (Median, mm)", y = "DVARS (Median)", color = "Kategorie (Outlier)") +
+  theme_minimal(base_size = 12)
+ggsave(file.path(out_dir, "qc_scatter_fd_dvars_by_subject.png"), p_fd_dvars_sub,
+       width = 12, height = 8, dpi = 150, device = "png")
+
+# Mean-Balken
+p_fd_mean <- ggplot(plot_df, aes(reorder(run_label, fd_mean), fd_mean,
+                                 fill = fd_mean > fd_mean_cut)) +
+  geom_col() +
+  geom_hline(yintercept = fd_mean_cut, linetype = "dashed") +
+  coord_flip() +
+  labs(title = "FD Mittelwert pro Run",
+       x = "Run", y = "FD Mean (mm)",
+       fill = paste0("Flag (FD Mean > ", fd_mean_cut, " mm)")) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(`FALSE` = "grey70", `TRUE` = "firebrick"))
+ggsave(file.path(out_dir, "qc_plot_fd_mean_per_run.png"), p_fd_mean,
+       width = 11, height = 8, dpi = 150, device = "png")
+
+p_dvars_mean <- ggplot(plot_df, aes(reorder(run_label, dvars_mean), dvars_mean,
+                                    fill = dvars_mean > dvars_mean_cut)) +
+  geom_col() +
+  geom_hline(yintercept = dvars_mean_cut, linetype = "dashed") +
+  coord_flip() +
+  labs(title = "DVARS Mittelwert pro Run",
+       x = "Run", y = "DVARS Mean",
+       fill = paste0("Flag (DVARS Mean > ", dvars_mean_cut, ")")) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(`FALSE` = "grey70", `TRUE` = "firebrick"))
+ggsave(file.path(out_dir, "qc_plot_dvars_mean_per_run.png"), p_dvars_mean,
+       width = 11, height = 8, dpi = 150, device = "png")
+
+# Kombiniertes FD & DVARS (p95) mit Mean-Punkten
+df_fd <- plot_df %>% transmute(run_label, metric = "FD",    p95 = fd_p95,    mean_value = fd_mean)
+df_dv <- plot_df %>% transmute(run_label, metric = "DVARS", p95 = dvars_p95, mean_value = dvars_mean)
+combined_df <- bind_rows(df_fd, df_dv)
+pd <- position_dodge(width = 0.8)
+p_combined <- ggplot(combined_df, aes(x = reorder(run_label, p95), y = p95, fill = metric)) +
+  geom_col(position = pd) +
+  geom_point(aes(y = mean_value), position = pd, shape = 21, color = "black", fill = "white", size = 1.8, stroke = 0.6) +
+  geom_hline(yintercept = fd_cut, linetype = "dashed") +    # FD
+  geom_hline(yintercept = dvars_cut, linetype = "dotted") + # DVARS
+  coord_flip() +
+  labs(title = "FD & DVARS – 95. Perzentil (mit Mittelwert-Punkten)",
+       subtitle = "Balken: 95. Perzentil · Punkt: Mittelwert · Linien: FD (gestr.), DVARS (gepunktet)",
+       x = "Run", y = "Wert", fill = "Metrik") +
+  theme_minimal(base_size = 12)
+ggsave(file.path(out_dir, "qc_plot_fd_dvars_p95_combined.png"), p_combined,
+       width = 12, height = 8, dpi = 150, device = "png")
+
+# === Plot: maximale Streak-Länge pro Run ===
+p_streak <- ggplot(plot_df, aes(reorder(run_label, max_streak_bad), max_streak_bad,
+                                fill = max_streak_bad >= K_block)) +
+  geom_col() +
+  geom_hline(yintercept = K_block, linetype = "dashed") +
+  coord_flip() +
+  labs(title = "Maximale Länge aufeinanderfolgender Outlier-TRs pro Run",
+       subtitle = paste0("Schwelle K = ", K_block, " TRs (", round(K_block*TR_sec,1), " s)"),
+       x = "Run", y = "max. Blocklänge",
+       fill = paste0("Block ≥ ", K_block, " TRs")) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(`FALSE` = "grey70", `TRUE` = "firebrick"))
+ggsave(file.path(out_dir, "qc_plot_max_blocklength_per_run.png"), p_streak,
+       width = 12, height = 8, dpi = 150, device = "png")
+
+# === CSV aller Streak-Cluster >= K (ohne Events) ===
+extract_clusters_tbl <- function(flag_vec) {
+  r <- rle(flag_vec)
+  if (!any(r$values)) return(tibble(start = integer(0), end = integer(0), len = integer(0)))
+  ends   <- cumsum(r$lengths)
+  starts <- ends - r$lengths + 1
+  tibble(start = starts[r$values], end = ends[r$values], len = r$lengths[r$values])
+}
+cluster_rows <- pmap_dfr(list(meta$file, meta$sub, meta$ses, meta$task, meta$run, meta$dir),
+  function(f, sub, ses, task, run, dir) {
+    df <- read_confounds(f)
+    if (!"framewise_displacement" %in% names(df)) df$framewise_displacement <- NA_real_
+    dcol <- choose_dvars_col(df)
+    dvec <- if (is.na(dcol)) rep(NA_real_, nrow(df)) else df[[dcol]]
+    bad <- (suppressWarnings(as.numeric(df$framewise_displacement)) > fd_cut) |
+           (suppressWarnings(as.numeric(dvec)) > dvars_cut)
+    bad[is.na(bad)] <- FALSE
+    cl <- extract_clusters_tbl(bad) %>% filter(len >= K_block)
+    if (nrow(cl) == 0) return(tibble())
+    cl %>% mutate(file = f, sub = sub, ses = ses, task = task, run = run, dir = dir) %>%
+      relocate(file, sub, ses, task, run, dir)
+  })
+if (nrow(cluster_rows) > 0) {
+  write_csv(cluster_rows, file.path(out_dir, paste0("qc_clusters_ge", K_block, ".csv")))
+}
+
+# === Events-Überlappung je Block (falls Events vorhanden) ===
+block_rows <- purrr::pmap_dfr(
+  list(meta$file, meta$sub, meta$ses, meta$task, meta$run, meta$dir),
+  function(f, sub, ses, task, run, dir) {
+    dfc <- read_confounds(f)
+    if (!"framewise_displacement" %in% names(dfc)) dfc$framewise_displacement <- NA_real_
+    dcol <- choose_dvars_col(dfc)
+    dvec <- if (is.na(dcol)) rep(NA_real_, nrow(dfc)) else dfc[[dcol]]
+
+    bad <- (suppressWarnings(as.numeric(dfc$framewise_displacement)) > fd_cut) |
+           (suppressWarnings(as.numeric(dvec)) > dvars_cut)
+    bad[is.na(bad)] <- FALSE
+    n_vols <- nrow(dfc)
+
+    ev_path <- guess_events_path(f)
+    ev <- read_events_generic(ev_path)
+    if (is.null(ev) || nrow(ev) == 0) return(tibble())
+
+    trs_by_row <- purrr::map2(ev$onset, ev$duration, ~ event_to_tr_idx(.x, .y, TR_sec, n_vols))
+    ev$trs <- trs_by_row
+
+    blk <- ev %>%
+      select(block, trs) %>%
+      tidyr::unnest(trs) %>%
+      distinct(block, trs) %>%
+      group_by(block) %>%
+      summarise(tr_idx = list(sort(unique(trs))), .groups = "drop") %>%
+      mutate(
+        n_trs_block = purrr::map_int(tr_idx, length),
+        n_bad_in_blk= purrr::map2_int(tr_idx, n_trs_block, ~sum(bad[.x], na.rm = TRUE)),
+        pct_bad_blk = 100 * n_bad_in_blk / pmax(1L, n_trs_block),
+        max_streak_blk = purrr::map_int(tr_idx, function(ix) {
+          if (length(ix) == 0) return(0L)
+          r <- rle(bad[ix]); if (!any(r$values)) return(0L)
+          max(r$lengths[r$values])
+        }),
+        compromised = (pct_bad_blk >= 20) | (max_streak_blk >= K_block)
+      )
+
+    blk %>% mutate(
+      file = f, sub = sub, ses = ses, task = task, run = run, dir = dir,
+      ev_file = ev_path,
+      n_vols_run = n_vols
+    ) %>% relocate(file, ev_file, sub, ses, task, run, dir, block)
+  }
+)
+if (nrow(block_rows) > 0) {
+  readr::write_csv(block_rows, file.path(out_dir, "qc_block_overlap.csv"))
+  message("Block-Overlap gespeichert: ", file.path(out_dir, "qc_block_overlap.csv"))
+} else {
+  message("Hinweis: Keine Events gefunden/zuordenbar -> qc_block_overlap.csv nicht erstellt.")
+}
+
+# === Timelines mit Block-Hinterlegung (nur Runs mit Events) ===
+tl_blocks_dir <- file.path(out_dir, "timelines_with_blocks")
+if (nrow(block_rows) > 0) {
+  dir.create(tl_blocks_dir, showWarnings = FALSE, recursive = TRUE)
+
+  runs_to_plot <- block_rows %>%
+    distinct(file, sub, ses, task, run, dir, ev_file)
+
+  purrr::pwalk(runs_to_plot, function(file, sub, ses, task, run, dir, ev_file) {
+    dfc <- read_confounds(file)
+    if (!"framewise_displacement" %in% names(dfc)) dfc$framewise_displacement <- NA_real_
+    dcol <- choose_dvars_col(dfc)
+    dvec <- if (is.na(dcol)) rep(NA_real_, nrow(dfc)) else dfc[[dcol]]
+    bad  <- (suppressWarnings(as.numeric(dfc$framewise_displacement)) > fd_cut) |
+            (suppressWarnings(as.numeric(dvec)) > dvars_cut)
+    bad[is.na(bad)] <- FALSE
+    n_vols <- nrow(dfc)
+
+    ev <- read_events_generic(ev_file)
+    if (is.null(ev) || nrow(ev) == 0) return(NULL)
+
+    blk_rects <- ev %>%
+      group_by(block) %>%
+      summarise(
+        onset_blk   = min(onset),
+        offset_blk  = max(onset + duration),
+        .groups = "drop"
+      ) %>%
+      mutate(
+        xstart = floor(onset_blk / TR_sec) + 0.5,
+        xend   = ceiling(offset_blk / TR_sec) + 0.5
+      )
+
+    df_tl <- tibble(frame = seq_len(n_vols), bad = bad)
+
+    p_tl <- ggplot() +
+      geom_rect(data = blk_rects,
+                aes(xmin = xstart, xmax = xend, ymin = 0.5, ymax = 1.5),
+                fill = "lightblue", alpha = 0.25, inherit.aes = FALSE) +
+      geom_tile(data = df_tl, aes(x = frame, y = 1, fill = bad), height = 0.9) +
+      scale_fill_manual(values = c(`FALSE` = "grey80", `TRUE` = "firebrick"),
+                        breaks = c(FALSE, TRUE),
+                        labels = c("OK-TR", "Bad-TR"),
+                        name = NULL) +
+      labs(
+        title = paste0("Timeline mit Blöcken: sub-", sub,
+                       ifelse(is.na(ses), "", paste0(" ses-", ses)),
+                       ifelse(is.na(task), "", paste0(" task-", task)),
+                       ifelse(is.na(run),  "", paste0(" run-",  run)),
+                       ifelse(is.na(dir),  "", paste0(" dir-",  dir))),
+        subtitle = paste0("Rot = FD>", fd_cut, " mm oder DVARS>", dvars_cut,
+                          " | K = ", K_block, " TRs (", round(K_block*TR_sec,1), " s)"),
+        x = "Frame (TR)", y = NULL
+      ) +
+      theme_minimal(base_size = 12) +
+      theme(axis.text.y = element_blank(),
+            axis.ticks.y = element_blank())
+
+    fn <- paste0("timeline_blocks_sub-", sub,
+                 ifelse(is.na(ses), "", paste0("_ses-", ses)),
+                 ifelse(is.na(task), "", paste0("_task-", task)),
+                 ifelse(is.na(run),  "", paste0("_run-",  run)),
+                 ifelse(is.na(dir),  "", paste0("_dir-",  dir)),
+                 ".png")
+    ggsave(file.path(tl_blocks_dir, fn), p_tl,
+           width = 14, height = 2.2, dpi = 150, device = "png")
+  })
+}
+
+message("Plots & Tabellen gespeichert in: ", out_dir)
