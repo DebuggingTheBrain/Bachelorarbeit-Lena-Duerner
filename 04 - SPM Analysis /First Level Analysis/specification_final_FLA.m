@@ -90,7 +90,7 @@ for s = 1:length(subs)
             matlabbatch{1}.spm.stats.fmri_spec.sess(1).cond(i).duration = data.durations{i};
             matlabbatch{1}.spm.stats.fmri_spec.sess(1).cond(i).tmod     = 0;
             matlabbatch{1}.spm.stats.fmri_spec.sess(1).cond(i).pmod     = struct('name', {}, 'param', {}, 'poly', {});
-            matlabbatch{1}.spm.stats.fmri_spec.sess(1).cond(i).orth     = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.sess(1).cond(i).orth     = 0;
         end
 
         matlabbatch{1}.spm.stats.fmri_spec.sess(1).multi = {''};
@@ -142,3 +142,4 @@ for s = 1:length(subs)
         fprintf('SPM Modell-Spezifikation abgeschlossen für %s %s\n', sub_name, ses_name);
     end
 end
+
