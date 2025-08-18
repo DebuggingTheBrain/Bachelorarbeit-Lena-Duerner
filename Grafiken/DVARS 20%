@@ -1,0 +1,43 @@
+# === DVARS Flag-Plot ===
+
+# Neue Kategorie auf Basis: % Frames mit DVARS > 1.5
+plot_df <- plot_df %>%
+    dplyr::mutate(
+        dvars_class = dplyr::case_when(
+            dvars_pct_gt > 20                      ~ "Ausschließen (>20%)",
+            dvars_pct_gt >= 5 & dvars_pct_gt <= 20 ~ "Kritisch (5–20%)",
+            dvars_pct_gt < 5                       ~ "OK (<5%)",
+            TRUE                                   ~ "Unbekannt"
+        ),
+        run_label = forcats::fct_reorder(run_label, dvars_pct_gt, .desc = TRUE)
+    )
+
+# Plot erstellen
+p_dvars_flagged <- ggplot2::ggplot(plot_df, aes(x = run_label, y = dvars_pct_gt, fill = dvars_class)) +
+    geom_col() +
+    geom_hline(yintercept = 20, linetype = "dashed", color = "black") +
+    coord_flip() +
+    labs(
+        title = "DVARS-QC: Anteil auffälliger Frames pro Run",
+        subtitle = "Nur DVARS berücksichtigt – Ausschluss ab >20% Frames > 1.5",
+        x = "Run",
+        y = "% Frames mit DVARS > 1.5",
+        fill = "Kategorie"
+    ) +
+    theme_minimal(base_size = 12) +
+    scale_fill_manual(values = c(
+        "OK (<5%)" = "forestgreen",
+        "Kritisch (5–20%)" = "#FDBA74",
+        "Ausschließen (>20%)" = "salmon",
+        "Unbekannt" = "grey50"
+    ))
+
+# Plot speichern
+ggplot2::ggsave(
+    filename = file.path(out_dir, "qc_plot_dvars_flagged_only.png"),
+    plot = p_dvars_flagged,
+    width = 12,
+    height = 8,
+    dpi = 150,
+    device = "png"
+)
