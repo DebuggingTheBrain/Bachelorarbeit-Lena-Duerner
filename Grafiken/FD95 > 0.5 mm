@@ -1,0 +1,47 @@
+library(tidyverse)
+
+# === Einstellungen ===
+input_csv <- "F:/FMRIPREPRESULTFINAL/_qc_plots/qc_summary_fmriprep_confounds.csv"  # Pfad zur CSV
+out_dir   <- "F:/FMRIPREPRESULTFINAL/_qc_plots"                                     # Plot-Output
+fd_cut    <- 0.50  # Neue Schwelle: FD95 > 0.5 mm
+
+# === Daten einlesen ===
+df <- read_csv(input_csv, show_col_types = FALSE)
+
+# === Run-Label für y-Achse zusammenbauen ===
+df <- df %>%
+  mutate(run_label = paste0(
+    "sub-", sub,
+    ifelse(!is.na(ses),  paste0("_ses-", ses), ""),
+    ifelse(!is.na(task), paste0("_task-", task), ""),
+    ifelse(!is.na(run),  paste0("_run-",  run), ""),
+    ifelse(!is.na(dir),  paste0("_dir-",  dir), "")
+  )) %>%
+  mutate(
+    flag_fd95 = !is.na(fd_p95) & fd_p95 > fd_cut
+  )
+
+# === Plot: FD95 mit Mean-Punkt ===
+p_fd <- ggplot(df, aes(x = reorder(run_label, fd_p95), y = fd_p95, fill = flag_fd95)) +
+  geom_col() +
+  geom_point(aes(y = fd_mean),
+             shape = 21, size = 1.8, color = "black", fill = "white", stroke = 0.6) +
+  geom_hline(yintercept = fd_cut, linetype = "dashed") +
+  coord_flip() +
+  labs(
+    title = "FD 95. Perzentil pro Run",
+    subtitle = "Punkt = FD-Mittelwert",
+    x = "Run", y = "FD (mm)",
+    fill = paste0("Flag (FD95 > ", fd_cut, " mm)")
+  ) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(`FALSE` = "grey70", `TRUE` = "firebrick"))
+
+# === Speichern ===
+ggsave(
+  filename = file.path(out_dir, "qc_plot_fd_p95_per_run.png"),
+  plot = p_fd,
+  width = 11, height = 8, dpi = 150, device = "png"
+)
+
+message("✅ FD95-Plot gespeichert unter: ", file.path(out_dir, "qc_plot_fd_p95_per_run.png"))
