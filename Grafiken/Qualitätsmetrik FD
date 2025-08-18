@@ -1,0 +1,165 @@
+# QC über alle fMRIPrep-Confounds (R / tidyverse)
+# - 3 Klassen (OK / Kritisch / Ausschließen) auf Basis von FD-Mittelwert
+# - Nur FD-Mittelwert berücksichtigt, Schwelle: >0.5 mm → Ausschließen
+# - Farbkodierung: Grün (OK), Gelb (Kritisch), Rot (Ausschließen)
+# - Speichert alle Ergebnisse in out_dir (inkl. .csv und .png)
+# -------------------------------------------------------------------------------------
+
+library(tidyverse)
+library(readr)
+library(stringr)
+
+# === Einstellungen ===
+root_dir        <- "F:/FMRIPREPRESULTFINAL"          # dein Wurzelordner
+out_dir         <- file.path(root_dir, "_qc_plots")  # Output-Ordner für alle Dateien
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+fd_cut          <- 0.20   # Cutoff pro Frame (FD, mm) — nur für Flagging
+dvars_cut       <- 2.0    # Cutoff pro Frame (DVARS vstd/std)
+fd_mean_cut     <- 0.50   # FD-Mittelwert Cutoff für Ausschluss
+dvars_mean_cut  <- 2.0
+
+# === Hilfsfunktionen ===
+parse_bids <- function(path) {
+  fname <- basename(path)
+  tibble(
+    file = path,
+    sub  = str_match(fname, "sub-([A-Za-z0-9]+)")[,2],
+    ses  = str_match(fname, "ses-([A-Za-z0-9]+)")[,2],
+    task = str_match(fname, "task-([A-Za-z0-9]+)")[,2],
+    run  = str_match(fname, "run-([A-Za-z0-9]+)")[,2],
+    dir  = str_match(fname, "dir-([A-Za-z0-9]+)")[,2]
+  )
+}
+
+safe_quantile <- function(x, p) {
+  x <- suppressWarnings(as.numeric(x))
+  if (all(is.na(x))) return(NA_real_)
+  as.numeric(quantile(x, p, na.rm = TRUE, names = FALSE))
+}
+safe_mean   <- function(x) { x <- suppressWarnings(as.numeric(x)); if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE) }
+safe_median <- function(x) { x <- suppressWarnings(as.numeric(x)); if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE) }
+safe_pct_gt <- function(x, cut) {
+  x <- suppressWarnings(as.numeric(x))
+  if (all(is.na(x))) return(NA_real_)
+  mean(x > cut, na.rm = TRUE) * 100
+}
+
+read_confounds <- function(path) {
+  df <- read_tsv(
+    path,
+    na = c("n/a", "NA", "NaN", "Inf", "-Inf"),
+    show_col_types = FALSE,
+    progress = FALSE
+  )
+  if (!"timepoint" %in% names(df)) df <- df %>% mutate(timepoint = row_number())
+  num_cols <- intersect(c("framewise_displacement", "dvars_vstd", "std_dvars", "dvars"), names(df))
+  df %>% mutate(across(all_of(num_cols), ~ suppressWarnings(as.numeric(.x))))
+}
+
+choose_dvars_col <- function(df) {
+  if ("dvars_vstd" %in% names(df)) return("dvars_vstd")
+  if ("std_dvars"  %in% names(df)) return("std_dvars")
+  if ("dvars"      %in% names(df)) return("dvars")
+  NA_character_
+}
+
+sum_outliers <- function(df) {
+  mcols <- names(df)[str_detect(names(df), "^motion_outlier\\d+$")]
+  if (length(mcols) == 0) return(0L)
+  df %>%
+    select(all_of(mcols)) %>%
+    mutate(across(everything(), ~replace_na(suppressWarnings(as.numeric(.)), 0))) %>%
+    rowSums() %>% sum(na.rm = TRUE)
+}
+
+# Neue Klassifikation basierend auf FD-Mittelwert
+classify_fd_mean <- function(m) {
+  case_when(
+    is.na(m) ~ NA_character_,
+    m < 0.2  ~ "OK (<0.2 mm)",
+    m <= 0.5 ~ "Kritisch (0.2–0.5 mm)",
+    m > 0.5  ~ "Ausschließen (>0.5 mm)"
+  )
+}
+
+# === Hauptverarbeitung ===
+files_tsv <- list.files(
+  root_dir,
+  pattern = "desc-confounds_timeseries\\.tsv(\\.gz)?$",
+  recursive = TRUE,
+  full.names = TRUE
+)
+stopifnot(length(files_tsv) > 0)
+
+meta <- map_dfr(files_tsv, parse_bids)
+
+all_runs <- pmap_dfr(list(meta$file, meta$sub, meta$ses, meta$task, meta$run, meta$dir),
+  function(f, sub, ses, task, run, dir) {
+    df <- read_confounds(f)
+
+    if (!"framewise_displacement" %in% names(df)) df$framewise_displacement <- NA_real_
+    dvars_col <- choose_dvars_col(df)
+    df$.__dvars <- if (is.na(dvars_col)) NA_real_ else df[[dvars_col]]
+
+    fd_flag <- suppressWarnings(as.numeric(df$framewise_displacement) > fd_cut)
+    fd_flag[is.na(fd_flag)] <- FALSE
+
+    fd_pct_gt <- if (length(fd_flag) == 0) NA_real_ else mean(fd_flag) * 100
+
+    tibble(
+      file = f,
+      sub  = sub, ses = ses, task = task, run = run, dir = dir,
+      n_vols       = nrow(df),
+      fd_mean      = safe_mean(df$framewise_displacement),
+      fd_median    = safe_median(df$framewise_displacement),
+      fd_p95       = safe_quantile(df$framewise_displacement, 0.95),
+      fd_pct_gt    = fd_pct_gt,
+      dvars_col    = dvars_col,
+      dvars_mean   = safe_mean(df$.__dvars),
+      dvars_median = safe_median(df$.__dvars),
+      dvars_p95    = safe_quantile(df$.__dvars, 0.95),
+      dvars_pct_gt = safe_pct_gt(df$.__dvars, dvars_cut),
+      category     = classify_fd_mean(safe_mean(df$framewise_displacement)),
+      motion_outliers = sum_outliers(df)
+    )
+  })
+
+write_csv(all_runs, file.path(out_dir, "qc_summary_fmriprep_confounds.csv"))
+
+# === Plot ===
+plot_df <- all_runs %>%
+  filter(!is.na(fd_mean)) %>%
+  mutate(
+    run_label = paste0("sub-", sub,
+                       ifelse(!is.na(ses), paste0("_ses-", ses), ""),
+                       ifelse(!is.na(run), paste0("_run-", run), "")),
+    fd_class = case_when(
+      fd_mean > 0.5                     ~ "Ausschließen (>0.5 mm)",
+      fd_mean >= 0.2 & fd_mean <= 0.5   ~ "Kritisch (0.2–0.5 mm)",
+      fd_mean < 0.2                     ~ "OK (<0.2 mm)",
+      TRUE                              ~ "Unbekannt"
+    ),
+    run_label = fct_reorder(run_label, fd_mean, .desc = TRUE)
+  )
+
+p_fd_mean <- ggplot(plot_df, aes(x = run_label, y = fd_mean, fill = fd_class)) +
+  geom_col() +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") +
+  coord_flip() +
+  labs(
+    title = "FD-QC: FD-Mittelwert pro Run",
+    subtitle = "Klassifikation basierend auf durchschnittlichem FD – Ausschluss ab >0.5 mm",
+    x = "Run", y = "FD-Mittelwert",
+    fill = "Kategorie"
+  ) +
+  theme_minimal(base_size = 12) +
+  scale_fill_manual(values = c(
+    "OK (<0.2 mm)" = "forestgreen",
+    "Kritisch (0.2–0.5 mm)" = "gold",
+    "Ausschließen (>0.5 mm)" = "salmon",
+    "Unbekannt" = "grey50"
+  ))
+
+ggsave(file.path(out_dir, "qc_plot_fd_mean_only.png"), p_fd_mean,
+       width = 12, height = 8, dpi = 150, device = "png")
