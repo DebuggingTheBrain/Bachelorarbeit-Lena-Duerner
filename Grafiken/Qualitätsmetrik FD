@@ -1,8 +1,10 @@
 # QC über alle fMRIPrep-Confounds (R / tidyverse)
-# - 3 Klassen (OK / Kritisch / Ausschließen) auf Basis von FD-Mittelwert
-# - Nur FD-Mittelwert berücksichtigt, Schwelle: >0.5 mm → Ausschließen
-# - Farbkodierung: Grün (OK), Gelb (Kritisch), Rot (Ausschließen)
-# - Speichert alle Ergebnisse in out_dir (inkl. .csv und .png)
+# - 3 Klassen (OK / Kritisch / Ausschließen) auf Basis von Frame-Outliern
+# - Nur FD berücksichtigt, Schwelle: >20 % Frames mit FD > 0.5 mm → Ausschließen
+# - Flagging in FD95-Balkenplots (+ Mittelwert-Punkte)
+# - Zusätzliche Klassifikation & Plots auf Basis von Mittelwerten (fd_mean)
+# - FD & DVARS (95. Perzentil) kombiniert bleibt erhalten
+# - Speichert alles in out_dir mit absoluten Pfaden (device = "png")
 # -------------------------------------------------------------------------------------
 
 library(tidyverse)
@@ -14,9 +16,9 @@ root_dir        <- "F:/FMRIPREPRESULTFINAL"          # dein Wurzelordner
 out_dir         <- file.path(root_dir, "_qc_plots")  # Output-Ordner für alle Dateien
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-fd_cut          <- 0.20   # Cutoff pro Frame (FD, mm) — nur für Flagging
+fd_cut          <- 0.50   # Neue Cutoff pro Frame (FD, mm)
 dvars_cut       <- 2.0    # Cutoff pro Frame (DVARS vstd/std)
-fd_mean_cut     <- 0.50   # FD-Mittelwert Cutoff für Ausschluss
+fd_mean_cut     <- 0.50   # FD-Mittelwert Cutoff NUR zur Anzeige (nicht zum Ausschluss)
 dvars_mean_cut  <- 2.0
 
 # === Hilfsfunktionen ===
@@ -73,17 +75,15 @@ sum_outliers <- function(df) {
     rowSums() %>% sum(na.rm = TRUE)
 }
 
-# Neue Klassifikation basierend auf FD-Mittelwert
-classify_fd_mean <- function(m) {
+classify_pct <- function(p) {
   case_when(
-    is.na(m) ~ NA_character_,
-    m < 0.2  ~ "OK (<0.2 mm)",
-    m <= 0.5 ~ "Kritisch (0.2–0.5 mm)",
-    m > 0.5  ~ "Ausschließen (>0.5 mm)"
+    is.na(p) ~ NA_character_,
+    p < 5    ~ "OK (<5%)",
+    p <= 20  ~ "Kritisch (5–20%)",
+    p > 20   ~ "Ausschließen (>20%)"
   )
 }
 
-# === Hauptverarbeitung ===
 files_tsv <- list.files(
   root_dir,
   pattern = "desc-confounds_timeseries\\.tsv(\\.gz)?$",
@@ -120,46 +120,46 @@ all_runs <- pmap_dfr(list(meta$file, meta$sub, meta$ses, meta$task, meta$run, me
       dvars_median = safe_median(df$.__dvars),
       dvars_p95    = safe_quantile(df$.__dvars, 0.95),
       dvars_pct_gt = safe_pct_gt(df$.__dvars, dvars_cut),
-      category     = classify_fd_mean(safe_mean(df$framewise_displacement)),
+      category     = classify_pct(fd_pct_gt),
       motion_outliers = sum_outliers(df)
     )
   })
 
 write_csv(all_runs, file.path(out_dir, "qc_summary_fmriprep_confounds.csv"))
 
-# === Plot ===
 plot_df <- all_runs %>%
-  filter(!is.na(fd_mean)) %>%
+  mutate(fd_pct_gt = replace_na(fd_pct_gt, 0)) %>%  # NA → 0, um alles darzustellen
   mutate(
     run_label = paste0("sub-", sub,
                        ifelse(!is.na(ses), paste0("_ses-", ses), ""),
                        ifelse(!is.na(run), paste0("_run-", run), "")),
     fd_class = case_when(
-      fd_mean > 0.5                     ~ "Ausschließen (>0.5 mm)",
-      fd_mean >= 0.2 & fd_mean <= 0.5   ~ "Kritisch (0.2–0.5 mm)",
-      fd_mean < 0.2                     ~ "OK (<0.2 mm)",
-      TRUE                              ~ "Unbekannt"
+      fd_pct_gt > 20                      ~ "Ausschließen (>20%)",
+      fd_pct_gt >= 5 & fd_pct_gt <= 20    ~ "Kritisch (5–20%)",
+      fd_pct_gt < 5                       ~ "OK (<5%)",
+      TRUE                                ~ "Unbekannt"
     ),
-    run_label = fct_reorder(run_label, fd_mean, .desc = TRUE)
+    run_label = fct_reorder(run_label, fd_pct_gt, .desc = TRUE)
   )
 
-p_fd_mean <- ggplot(plot_df, aes(x = run_label, y = fd_mean, fill = fd_class)) +
+p_fd_flagged <- ggplot(plot_df, aes(x = run_label, y = fd_pct_gt, fill = fd_class)) +
   geom_col() +
-  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") +
+  geom_hline(yintercept = 20, linetype = "dashed", color = "black") +
   coord_flip() +
   labs(
-    title = "FD-QC: FD-Mittelwert pro Run",
-    subtitle = "Klassifikation basierend auf durchschnittlichem FD – Ausschluss ab >0.5 mm",
-    x = "Run", y = "FD-Mittelwert",
+    title = "FD-QC: Anteil auffälliger Frames pro Run",
+    subtitle = "Nur FD berücksichtigt – Ausschluss ab >20% Frames > 0.5 mm",
+    x = "Run", y = "% Frames mit FD > 0.5 mm",
     fill = "Kategorie"
   ) +
   theme_minimal(base_size = 12) +
   scale_fill_manual(values = c(
-    "OK (<0.2 mm)" = "forestgreen",
-    "Kritisch (0.2–0.5 mm)" = "gold",
-    "Ausschließen (>0.5 mm)" = "salmon",
+    "OK (<5%)" = "forestgreen",
+    "Kritisch (5–20%)" = "#FDBA74",
+    "Ausschließen (>20%)" = "salmon",
     "Unbekannt" = "grey50"
   ))
 
-ggsave(file.path(out_dir, "qc_plot_fd_mean_only.png"), p_fd_mean,
+ggsave(file.path(out_dir, "qc_plot_fd_flagged_only.png"), p_fd_flagged,
        width = 12, height = 8, dpi = 150, device = "png")
+
