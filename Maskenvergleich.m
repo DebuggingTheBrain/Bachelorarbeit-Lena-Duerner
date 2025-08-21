@@ -4,7 +4,7 @@
 
 % === Eingabedateien ===
 maskA = 'F:\FMRIPREPRESULTFINAL\ROIs\Combined_ROI_Sum.nii';     % Referenzmaske A
-maskB = 'F:\FMRIPREPRESULTFINAL\ROIs\Frontal_Mid_R.nii';        % Zu resamplende Maske B
+maskB = 'F:\FMRIPREPRESULTFINAL\ROIs\DLPFC.nii';        % Zu resamplende Maske B
 
 % === Ausgabedateien ===
 outB        = 'F:\FMRIPREPRESULTFINAL\ROIs\rFrontal_Mid_R_inA_manual.nii';   % resamplte B-Maske in A
