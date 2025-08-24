@@ -6,7 +6,7 @@ library(gghalves)    # für Halbviolinplots (Raincloud)
 library(tidyr)
 
 # Daten vorbereiten
-plot_data <- gesamt %>%
+plot_data <- df %>%
   filter(
     !is.na(T1_SPQ_Sum),
     !is.na(T4_SPQ_Sum),
