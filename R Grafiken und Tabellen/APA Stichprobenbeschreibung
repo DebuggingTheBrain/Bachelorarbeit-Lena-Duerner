@@ -1,0 +1,171 @@
+#### hier die Stichprobenbeschreibung ohne Gruppenunterschied 
+
+# Pakete laden
+library(dplyr)
+library(gtsummary)
+
+# ---- Variablen definieren ----
+cat_vars <- c("T1_Gender", "T2_DIPS_Criteria")
+num_vars <- c("T1_Age", "T1_Age_FearOfSpiders",
+              "T1_SDS_F", "T4_SDS_F", "T1_SDS_D", "T4_SDS_D",
+              "T1_SPQ_Sum", "T4_SPQ_Sum")
+
+# Nur vorhandene Spalten berücksichtigen
+cat_vars <- intersect(cat_vars, names(df))
+num_vars <- intersect(num_vars, names(df))
+
+# Optional: Labels
+labels_named <- c(
+  T1_Gender            = "Gender (T1)",
+  T2_DIPS_Criteria     = "DIPS Criteria (T2)",
+  T1_Age               = "Age (T1)",
+  T1_Age_FearOfSpiders = "Age – Fear of Spiders (T1)",
+  T1_SDS_F             = "SDS-F (T1, Items 1–13)",
+  T4_SDS_F             = "SDS-F (T4, Items 1–13)",
+  T1_SDS_D             = "SDS-D (T1, Items 14–17)",
+  T4_SDS_D             = "SDS-D (T4, Items 14–17)",
+  T1_SPQ_Sum           = "SPQ Sum (T1, count of 2s)",
+  T4_SPQ_Sum           = "SPQ Sum (T4, count of 2s)"
+)
+
+# Label-Funktion
+make_label_list <- function(vars) {
+  labs <- labels_named[names(labels_named) %in% vars]
+  out <- as.list(unname(labs))
+  names(out) <- names(labs)
+  out
+}
+
+# ---- Daten vorbereiten ----
+if (length(cat_vars) > 0) {
+  df <- df %>% mutate(across(all_of(cat_vars), as.factor))
+}
+
+# ---- Tabelle erstellen und anzeigen ----
+
+# Kategoriale Tabelle
+if (length(cat_vars) > 0) {
+  cat_table <- df %>%
+    select(all_of(cat_vars)) %>%
+    tbl_summary(
+      type = list(everything() ~ "categorical"),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+      missing = "ifany",
+      label = make_label_list(cat_vars)
+    ) %>%
+    modify_caption("**Table 1. Categorical Variables (APA-style)**")
+
+  print(cat_table)
+}
+
+# Metrische Tabelle
+if (length(num_vars) > 0) {
+  num_table <- df %>%
+    select(all_of(num_vars)) %>%
+    tbl_summary(
+      type = list(everything() ~ "continuous2"),
+      statistic = list(all_continuous() ~ "{mean} ({sd}) [{min}, {max}]"),
+      digits = everything() ~ 2,
+      missing = "ifany",
+      label = make_label_list(num_vars)
+    ) %>%
+    modify_caption("**Table 2. Continuous Variables (APA-style)**")
+
+  print(num_table)
+}
+
+
+
+
+## hier Sichprobenbeschreibung mit Gruppenunterschied 
+
+
+
+# Pakete
+library(dplyr)
+library(gtsummary)
+
+# ---------- Variablen ----------
+cat_vars <- c("T1_Gender", "T2_DIPS_Criteria")
+num_vars <- c("T1_Age", "T1_Age_FearOfSpiders",
+              "T1_SDS_F", "T4_SDS_F", "T1_SDS_D", "T4_SDS_D",
+              "T1_SPQ_Sum", "T4_SPQ_Sum")
+
+# Nur Variablen verwenden, die wirklich im Datensatz vorkommen
+cat_vars <- intersect(cat_vars, names(df))
+num_vars <- intersect(num_vars, names(df))
+
+# Sicherstellen, dass Gruppierungsvariable vorhanden ist
+if (!"ENT_Gruppe" %in% names(df)) {
+  stop("Variable 'ENT_Gruppe' fehlt im Datensatz!")
+}
+
+# Labels (optional)
+labels_named <- c(
+  T1_Gender            = "Gender (T1)",
+  T2_DIPS_Criteria     = "DIPS Criteria (T2)",
+  T1_Age               = "Age (T1)",
+  T1_Age_FearOfSpiders = "Age – Fear of Spiders (T1)",
+  T1_SDS_F             = "SDS-F (T1, Items 1–13)",
+  T4_SDS_F             = "SDS-F (T4, Items 1–13)",
+  T1_SDS_D             = "SDS-D (T1, Items 14–17)",
+  T4_SDS_D             = "SDS-D (T4, Items 14–17)",
+  T1_SPQ_Sum           = "SPQ Sum (T1, count of 2s)",
+  T4_SPQ_Sum           = "SPQ Sum (T4, count of 2s)"
+)
+
+make_label_list <- function(vars) {
+  labs <- labels_named[names(labels_named) %in% vars]
+  out <- as.list(unname(labs))
+  names(out) <- names(labs)
+  out
+}
+
+# ---------- Gruppierungsvariable als Faktor ----------
+df <- df %>%
+  mutate(ENT_Gruppe = as.factor(ENT_Gruppe))
+
+# ---------- Datentypen sicherstellen ----------
+if (length(cat_vars) > 0) {
+  df <- df %>% mutate(across(all_of(cat_vars), as.factor))
+}
+if (length(num_vars) > 0) {
+  df <- df %>% mutate(across(all_of(num_vars), ~ suppressWarnings(as.numeric(as.character(.)))))
+}
+
+# ---------- Tabelle: Kategorial (nach Gruppe) ----------
+if (length(cat_vars) > 0) {
+  cat_table <- df %>%
+    select(all_of(cat_vars), ENT_Gruppe) %>%
+    tbl_summary(
+      by = ENT_Gruppe,
+      type = list(everything() ~ "categorical"),
+      statistic = list(all_categorical() ~ "{n} ({p}%)"),
+      missing = "ifany",
+      label = make_label_list(cat_vars)
+    ) %>%
+    modify_header(label ~ "**Variable**") %>%
+    modify_caption("**Table 1. Categorical Variables by Group (APA-style)**") %>%
+    bold_labels()
+
+  print(cat_table)
+}
+
+# ---------- Tabelle: Metrisch (nach Gruppe) ----------
+if (length(num_vars) > 0) {
+  num_table <- df %>%
+    select(all_of(num_vars), ENT_Gruppe) %>%
+    tbl_summary(
+      by = ENT_Gruppe,
+      type = list(everything() ~ "continuous2"),
+      statistic = list(all_continuous() ~ "{mean} ({sd}) [{min}, {max}]"),
+      digits = everything() ~ 2,
+      missing = "ifany",
+      label = make_label_list(num_vars)
+    ) %>%
+    modify_header(label ~ "**Variable**", all_stat_cols() ~ "**M (SD) [Min, Max]**") %>%
+    modify_caption("**Table 2. Continuous Variables by Group (APA-style)**") %>%
+    bold_labels()
+
+  print(num_table)
+}
