@@ -1,0 +1,81 @@
+% =========================================================================
+% Seed-to-Seed 2nd-Level Analyse (TMFC, Kontrast: spiderbird)
+% Ohne FDR-Korrektur, mit Visualisierung
+% =========================================================================
+
+% === Einstellungen ===
+dataDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\symmetrical';
+files = dir(fullfile(dataDir, '*Contrast_0005*spiderbird*.mat'));
+
+nSub = numel(files);
+fprintf('Gefundene Kontrastdateien: %d\n', nSub);
+
+% === Beispiel-Datei laden, um Matrixgröße zu erkennen ===
+example = load(fullfile(dataDir, files(1).name));
+fn = fieldnames(example);             % Feldname (z. B. PPI_r oder ROI_Matrix)
+matrix = example.(fn{1});            % Zugriff auf die Matrix
+[nSeeds, ~] = size(matrix);
+
+% === Alle Matrizen einsammeln ===
+allData = zeros(nSeeds, nSeeds, nSub);
+
+for i = 1:nSub
+    d = load(fullfile(dataDir, files(i).name));
+    matrix = d.(fn{1});
+    allData(:, :, i) = matrix;
+end
+
+% === Gruppenmittelwert berechnen ===
+meanMat = mean(allData, 3);
+
+% === One-sample t-Tests (pro Zellposition) ===
+tMat = zeros(nSeeds, nSeeds);
+pMat = zeros(nSeeds, nSeeds);
+
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        x = squeeze(allData(i, j, :));
+        [~, p, ~, stats] = ttest(x);
+        tMat(i, j) = stats.tstat;
+        pMat(i, j) = p;
+    end
+end
+
+% =========================================================================
+% === Visualisierung ===
+% =========================================================================
+
+% --- 1. Mittelwertmatrix ---
+figure;
+imagesc(meanMat);
+title('Mittelwert der PPI-Verbindungen (spiderbird)');
+xlabel('Seed');
+ylabel('Seed');
+colorbar;
+
+% --- 2. t-Wert-Matrix ---
+figure;
+imagesc(tMat);
+title('t-Werte der Seed-to-Seed Verbindungen');
+xlabel('Seed');
+ylabel('Seed');
+colorbar;
+
+% --- 3. Unkorrigierte Signifikanzen (p < 0.05) ---
+figure;
+imagesc(pMat < 0.05);
+title('Signifikante Verbindungen (p < 0.05 unkorrekt)');
+xlabel('Seed');
+ylabel('Seed');
+colorbar;
+
+% --- 4. Nur signifikante Mittelwerte anzeigen ---
+significantMean = meanMat;
+significantMean(pMat >= 0.05) = NaN;
+
+figure;
+imagesc(significantMean);
+title('Mittlere Werte bei p < 0.05 unkorreliert');
+xlabel('Seed');
+ylabel('Seed');
+colorbar;
