@@ -1,0 +1,150 @@
+%% =========================================================================
+% Seed-to-Seed Analyse: Einfluss der TMS-Stimulationsintensität auf
+% die Veränderung der Konnektivität (Δ T4–T1) innerhalb der rTMS-Gruppe
+% Erweiterung: FDR-Korrektur + Effekt-Richtung (β) + Visualisierungen
+% =========================================================================
+
+% === Verzeichnisse & Dateinamen ===
+t1Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
+t4Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T4\ROI_sets\angstt4\gPPI\ROI_to_ROI\asymmetrical';
+roiDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
+
+t1Pattern = '*Contrast_0005*spiderbird*.mat';
+t4Pattern = '*Contrast_0003*spiderbird*.mat';
+
+% === TMS-Intensität & Gruppenzugehörigkeit (einmaliger Wert pro Person)
+TMS_Intensity = [36, 31, 40, 33, 36, 43, 42, 44, 34, 46, ...
+                 47, 39, 42, 44, 36, 39, 32, 33, 40, 42, 32, 32];
+
+group_all = [ ...
+    1, 0, 1, 0, 0, 1, 1, 0, 0, 1, ...
+    1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1];
+
+%% === Nur rTMS-Subjekte auswählen ===
+is_rTMS = group_all == 1;
+TMS_Intensity_rTMS = TMS_Intensity(is_rTMS);
+
+filesT1 = dir(fullfile(t1Dir, t1Pattern));
+subj_ids_tmp = cellfun(@(x) str2double(regexp(x, 'Subject_(\d+)', 'tokens', 'once')), {filesT1.name});
+[~, sortIdx] = sort(subj_ids_tmp);
+filesT1 = filesT1(sortIdx);
+subj_ids_tmp = subj_ids_tmp(sortIdx);
+
+filesT1_rTMS = filesT1(is_rTMS);
+subj_ids_rTMS = subj_ids_tmp(is_rTMS);
+nSub_rTMS = sum(is_rTMS);
+fprintf('✅ Verwende %d rTMS-Subjekte.\n', nSub_rTMS);
+
+%% === Gemeinsame ROI-Größe bestimmen ===
+allSizes = [];
+for i = 1:nSub_rTMS
+    d = load(fullfile(t1Dir, filesT1_rTMS(i).name));
+    fn = fieldnames(d); m = d.(fn{1});
+    allSizes(end+1) = size(m,1);
+    subj_id = subj_ids_rTMS(i);
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allSizes(end+1) = size(m4,1);
+    end
+end
+nSeeds = min(allSizes);
+fprintf('👉 Verwende gemeinsame ROI-Anzahl: %d\n', nSeeds);
+
+%% === Seed-to-Seed-Daten laden ===
+allData_T1 = NaN(nSeeds, nSeeds, nSub_rTMS);
+allData_T4 = NaN(nSeeds, nSeeds, nSub_rTMS);
+for i = 1:nSub_rTMS
+    subj_id = subj_ids_rTMS(i);
+    d1 = load(fullfile(t1Dir, filesT1_rTMS(i).name)); fn = fieldnames(d1); m1 = d1.(fn{1});
+    allData_T1(:,:,i) = m1(1:nSeeds,1:nSeeds);
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4); m4 = d4.(fn{1});
+        allData_T4(:,:,i) = m4(1:nSeeds,1:nSeeds);
+    else
+        fprintf('⚠️ Keine T4-Datei für Subject %d\n', subj_id);
+    end
+end
+
+%% === ROI-Labels laden ===
+roiFilesStruct = dir(fullfile(roiDir, '*_masked.nii'));
+roiFileNames = sort({roiFilesStruct.name});
+roiLabels = cellfun(@(x) regexprep(x, '_in_MNI2009c_masked\.nii$', ''), roiFileNames, 'UniformOutput', false);
+roiLabels = roiLabels(1:nSeeds);
+
+%% === Regression: Δ(T4–T1) ~ TMS-Intensität (fester individueller Wert)
+Fvals = NaN(nSeeds,nSeeds); pvals = NaN(nSeeds,nSeeds); betas = NaN(nSeeds,nSeeds);
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        if i == j, continue; end
+        delta = squeeze(allData_T4(i,j,:) - allData_T1(i,j,:));
+        validIdx = ~isnan(delta);
+        if sum(validIdx) < 6, continue; end
+        y = delta(validIdx); x = TMS_Intensity_rTMS(validIdx);
+        X = [ones(length(x),1), x(:)];
+        [b,~,~,~,stats] = regress(y, X);
+        betas(i,j) = b(2);            % Steigung (Effektgröße)
+        Fvals(i,j) = stats(2);        % F-Wert
+        pvals(i,j) = stats(3);        % p-Wert
+    end
+end
+
+%% === FDR-Korrektur (Benjamini-Hochberg) auf p-Werten
+fprintf('\n🔎 FDR-Korrektur (Benjamini-Hochberg)...\n');
+mask_offdiag = true(nSeeds, nSeeds); mask_offdiag(1:nSeeds+1:end) = false;
+vec_p = pvals(mask_offdiag);
+valid_idx = ~isnan(vec_p); vec_p_valid = vec_p(valid_idx);
+fdr_vec_p = mafdr(vec_p_valid, 'BHFDR', true);
+pvals_FDR = NaN(size(pvals));
+temp = NaN(numel(vec_p),1); temp(valid_idx) = fdr_vec_p;
+pvals_FDR(mask_offdiag) = temp;
+sig_FDR_mask = pvals_FDR < 0.05;
+fprintf('✅ Signifikante Verbindungen nach FDR-Korrektur: %d\n', nansum(sig_FDR_mask(:)));
+
+%% === Ergebnisse exportieren
+[rowFDR, colFDR] = find(sig_FDR_mask);
+F_out = Fvals(sig_FDR_mask);
+p_uncorr_out = pvals(sig_FDR_mask);
+p_fdr_out = pvals_FDR(sig_FDR_mask);
+beta_out = betas(sig_FDR_mask);
+
+resultsTable = table( ...
+    roiLabels(rowFDR)', roiLabels(colFDR)', ...
+    F_out, p_uncorr_out, p_fdr_out, beta_out, ...
+    'VariableNames', {'From','To','F','p_uncorr','p_FDR','Beta_TMSIntensity'});
+
+writetable(resultsTable, 'SeedToSeed_TMSIntensity_rTMSOnly_FDRsignificant.csv');
+fprintf('📁 Exportiert: SeedToSeed_TMSIntensity_rTMSOnly_FDRsignificant.csv\n');
+
+%% === Visualisierungen
+set(0,'DefaultFigureColor','w');
+
+% 1) p-Werte (unkorrigiert)
+figure; imagesc(pvals); colorbar;
+title('p (unkorrigiert): TMS-Intensität (rTMS)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+% 2) p-Werte (FDR-korrigiert)
+figure; imagesc(pvals_FDR); colorbar;
+title('p (FDR-korrigiert): TMS-Intensität (rTMS)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+% 3) Effektstärke (β)
+figure; imagesc(betas); colorbar;
+title('Effekt (β): TMS-Intensität → Δ Konnektivität (rTMS)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+% 4) Binärmaske: FDR-signifikant
+figure; imagesc(sig_FDR_mask); colorbar;
+title('FDR-signifikant (q<0.05): TMS-Intensität (rTMS)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
