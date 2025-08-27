@@ -1,5 +1,5 @@
 % =========================================================================
-% Seed-to-Seed Permutationstest mit Max-T-Korrektur (nur ausgewählte ROIs)
+% Seed-to-Seed Permutationstest mit Max-T-Korrektur (alle ROIs automatisch)
 % =========================================================================
 
 % === Einstellungen ===
@@ -12,21 +12,22 @@ files = dir(fullfile(dataDir, '*Contrast_0005*spiderbird*.mat'));
 nSub = numel(files);
 fprintf('Gefundene Kontrastdateien: %d\n', nSub);
 
-% === Neue Auswahl der gewünschten ROIs ===
-selectedROIs = {
-    'Amygdala_L_in_MNI2009c_masked.nii', ...
-    'Amygdala_R_in_MNI2009c_masked.nii', ...
-    'Hippocampus_L_in_MNI2009c_masked.nii', ...
-    'Hippocampus_R_in_MNI2009c_masked.nii', ...
-    'Combined_ROI_Sum_in_MNI2009c_masked.nii', ...
-    'Insula_L_in_MNI2009c_masked.nii', ...
-    'DLPFC_in_MNI2009c_masked.nii', ...
-    'Cingulum_Ant_L_in_MNI2009c_masked.nii'
-};
-
-% Alle verfügbaren ROI-Dateien aus dem Ordner
+% === Alle verfügbaren ROIs automatisch auswählen (außer Group_mask) ===
 allROIsStruct = dir(fullfile(roiDir, '*_masked.nii'));
 allROINames = {allROIsStruct.name};
+
+% Entferne "Group_mask.nii", falls vorhanden
+allROINames = setdiff(allROINames, {'Group_mask.nii'});
+
+% ROIs alphabetisch sortieren (optional)
+selectedROIs = sort(allROINames);
+
+% ROI Labels extrahieren
+roiLabelsFull = regexprep(selectedROIs, '_in_MNI2009c_masked\.nii$', '');
+
+% Debug-Ausgabe
+fprintf('📌 Verwendete ROIs (%d):\n', numel(selectedROIs));
+disp(roiLabelsFull');
 
 % Indizes der ausgewählten ROIs in der Originalreihenfolge
 [found, idxSelected] = ismember(selectedROIs, allROINames);
@@ -35,12 +36,9 @@ if any(~found)
     error('Ein oder mehrere ausgewählte ROIs wurden im Ordner nicht gefunden:\n%s', strjoin(missing, '\n'));
 end
 
-% ROI Labels extrahieren
-roiLabelsFull = regexprep(selectedROIs, '_in_MNI2009c_masked\.nii$', '');
-
 % Dimensionen festlegen
-nSeeds1 = length(idxSelected);
-nSeeds2 = length(idxSelected);
+nSeeds1 = length(selectedROIs);
+nSeeds2 = length(selectedROIs);
 roiLabels1 = roiLabelsFull;
 roiLabels2 = roiLabelsFull;
 
@@ -196,4 +194,13 @@ writetable(sigOnly_FDR,  'SeedToSeed_PermutationTest_korrigiert_Signifikant_FDR.
 
 fprintf('✅ Signifikante Verbindungen gespeichert (Max-T): SeedToSeed_PermutationTest_korrigiert_Signifikant_MaxT.csv\n');
 fprintf('✅ Signifikante Verbindungen gespeichert (FDR): SeedToSeed_PermutationTest_korrigiert_Signifikant_FDR.csv\n');
+
+% =========================================================================
+% === Unkorrigiert signifikante Verbindungen (p < 0.05)
+% =========================================================================
+sig_uncorrected = resultsTable(resultsTable.p_Empirical < 0.05, :);
+
+% Exportieren
+writetable(sig_uncorrected, 'SeedToSeed_PermutationTest_unkorrigiert_signifikant_p005.csv');
+fprintf('📁 Unkorrigiert signifikante Verbindungen gespeichert (p < 0.05): SeedToSeed_PermutationTest_unkorrigiert_signifikant_p005.csv\n');
 
