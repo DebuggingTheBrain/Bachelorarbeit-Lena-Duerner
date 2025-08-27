@@ -1,29 +1,31 @@
 % =========================================================================
 % Seed-to-Seed 2nd-Level Analyse (asymmetrisch, spiderbird-Kontrast)
 % Mit ROI-Namen aus Masken, Visualisierung, Tabellenexport + FDR-Korrektur
+% Autorin: Lena Dürner 
+% letzte Veränderung: 27.08.2025 
 % =========================================================================
 
-% === Einstellungen ===
+% === zu Grunde liegende Pfade des Skriptes - hier anpassen oder ersetzen ===
 dataDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
 roiDir  = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
 
-% === Kontrastdateien finden ===
+% === Definition der Kontrastdateien - Aufsuchen ===========================
 files = dir(fullfile(dataDir, '*Contrast_0005*spiderbird*.mat'));
 nSub = numel(files);
 fprintf('Gefundene Kontrastdateien: %d\n', nSub);
 
 if nSub == 0
-    error('❌ Keine passenden Kontrastdateien gefunden.');
+    error('Keine passenden Kontrastdateien gefunden.');
 end
 
-% === Beispiel-Datei laden ===
+% === Beispiel-Datei laden =================================================
 example = load(fullfile(dataDir, files(1).name));
 fn = fieldnames(example);
 matrix = example.(fn{1});
 [nSeeds1, nSeeds2] = size(matrix);
 
 if nSeeds1 ~= nSeeds2
-    warning('⚠️ Matrix ist nicht quadratisch (%d x %d)', nSeeds1, nSeeds2);
+    warning('Matrix ist nicht quadratisch (%d x %d)', nSeeds1, nSeeds2);
 end
 
 % === ROI-Namen aus NIfTI-Dateien extrahieren (auch Unterverzeichnisse) ===
@@ -48,7 +50,7 @@ disp(roiLabels');
 
 % === Alle verfügbaren ROIs verwenden ===
 selectedIdx = 1:numel(roiLabels);
-fprintf('\n✅ Alle %d verfügbaren ROIs werden verwendet:\n', numel(selectedIdx));
+fprintf('\n Alle %d verfügbaren ROIs werden verwendet:\n', numel(selectedIdx));
 disp(roiLabels);
 
 roiLabels = roiLabels(selectedIdx);
@@ -83,20 +85,20 @@ for i = 1:nSeeds1
 end
 
 % === FDR-Korrektur (Benjamini-Hochberg) ===
-fprintf('\n🔎 FDR-Korrektur (Benjamini-Hochberg)...\n');
+fprintf('\n  FDR-Korrektur (Benjamini-Hochberg)...\n');
 mask_offdiag = true(nSeeds1, nSeeds2);
 mask_offdiag(1:nSeeds1+1:end) = false;
 vec_p = pMat(mask_offdiag);
 
 if isempty(vec_p) || all(isnan(vec_p))
-    error('❌ Keine gültigen p-Werte vorhanden für die FDR-Korrektur.');
+    error(' Keine gültigen p-Werte vorhanden für die FDR-Korrektur.');
 end
 
 fdr_vec_p = mafdr(vec_p, 'BHFDR', true);
 pMat_FDR = NaN(size(pMat));
 pMat_FDR(mask_offdiag) = fdr_vec_p;
 sig_FDR_Mat = pMat_FDR < 0.05;
-fprintf('✅ Signifikante Verbindungen nach FDR: %d\n', nansum(sig_FDR_Mat(:)));
+fprintf(' Signifikante Verbindungen nach FDR: %d\n', nansum(sig_FDR_Mat(:)));
 
 % === Visualisierung ===
 figure; imagesc(meanMat);
@@ -161,8 +163,8 @@ resultsTable = table( ...
 disp(resultsTable(1:min(10, height(resultsTable)), :));
 sortedTable = sortrows(resultsTable, 'p');
 writetable(sortedTable, 'SeedToSeed_Results_Asymmetric.csv');
-fprintf('\n✅ Tabelle gespeichert: SeedToSeed_Results_Asymmetric.csv\n');
+fprintf('\n Tabelle gespeichert: SeedToSeed_Results_Asymmetric.csv\n');
 
 signifOnly = sortedTable(sortedTable.Significant_FDR == 1, :);
 writetable(signifOnly, 'SeedToSeed_SignificantOnly_FDR_Asymmetric.csv');
-fprintf('✅ Nur FDR-signifikante Verbindungen gespeichert: SeedToSeed_SignificantOnly_FDR_Asymmetric.csv\n');
+fprintf(' Nur FDR-signifikante Verbindungen gespeichert: SeedToSeed_SignificantOnly_FDR_Asymmetric.csv\n');
