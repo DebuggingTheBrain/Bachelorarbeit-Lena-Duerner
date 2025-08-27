@@ -1,0 +1,242 @@
+%% =========================================================================
+% Seed-to-Seed 2nd-Level Analyse (Mixed ANOVA Gruppe × Zeit, robust)
+% =========================================================================
+
+% === Einstellungen ===
+t1Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
+t4Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T4\ROI_sets\angstt4\gPPI\ROI_to_ROI\asymmetrical';
+roiDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
+
+t1Pattern = '*Contrast_0005*spiderbird*.mat';
+t4Pattern = '*Contrast_0003*spiderbird*.mat';
+
+%% === Subject → Gruppe Mapping ===
+ids    = 1:22;
+groups = { 'rTMS', 'Placebo', 'rTMS', 'Placebo', ...
+           'Placebo', 'rTMS', 'rTMS', 'Placebo', ...
+           'Placebo', 'rTMS', 'rTMS', 'Placebo', ...
+           'rTMS', 'Placebo', 'Placebo', 'rTMS', ...
+           'rTMS', 'Placebo', 'rTMS', 'Placebo', ...
+           'Placebo', 'rTMS' };
+num_to_group = containers.Map(ids, groups);
+
+%% === T1 Dateien laden ===
+filesT1 = dir(fullfile(t1Dir, t1Pattern));
+nSub = numel(filesT1);
+fprintf('Gefundene T1 Dateien: %d\n', nSub);
+
+if nSub == 0
+    error('❌ Keine T1 Dateien gefunden.');
+end
+
+% Größen aller Matrizen sammeln
+allSizes = [];
+for i = 1:nSub
+    d = load(fullfile(t1Dir, filesT1(i).name));
+    fn = fieldnames(d);
+    m = d.(fn{1});
+    allSizes(end+1) = size(m,1);
+
+    subj_id = regexp(filesT1(i).name, 'Subject_(\d+)', 'tokens', 'once');
+    subj_id = str2double(subj_id{1});
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allSizes(end+1) = size(m4,1);
+    end
+end
+
+% kleinste gemeinsame Matrixgröße bestimmen
+nSeeds = min(allSizes);
+fprintf('👉 Verwende gemeinsame ROI-Anzahl: %d\n', nSeeds);
+
+% Speicher vorbereiten
+allData_T1 = NaN(nSeeds, nSeeds, nSub);
+allData_T4 = NaN(nSeeds, nSeeds, nSub);
+subjectIDs = NaN(nSub,1);
+
+% Matrizen laden & zuschneiden
+for i = 1:nSub
+    fnameT1 = filesT1(i).name;
+    subj_id = regexp(fnameT1, 'Subject_(\d+)', 'tokens', 'once');
+    if isempty(subj_id), continue; end
+    subj_id = str2double(subj_id{1});
+    subjectIDs(i) = subj_id;
+
+    % T1
+    d1 = load(fullfile(t1Dir, fnameT1));
+    fn = fieldnames(d1);
+    m1 = d1.(fn{1});
+    allData_T1(:,:,i) = m1(1:nSeeds, 1:nSeeds);
+
+    % T4
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allData_T4(:,:,i) = m4(1:nSeeds, 1:nSeeds);
+    else
+        fprintf('⚠️ Keine T4-Datei für Subject %d\n', subj_id);
+    end
+end
+
+%% === ROI Labels laden ===
+roiFilesStruct = dir(fullfile(roiDir, '*_masked.nii'));
+roiFileNames = sort({roiFilesStruct.name});
+roiLabels = cellfun(@(x) regexprep(x, '_in_MNI2009c_masked\.nii$', ''), roiFileNames, 'UniformOutput', false);
+roiLabels = roiLabels(1:nSeeds);
+
+%% === Mixed ANOVA pro Verbindung ===
+F_Group = NaN(nSeeds,nSeeds);
+p_Group = NaN(nSeeds,nSeeds);
+F_Time  = NaN(nSeeds,nSeeds);
+p_Time  = NaN(nSeeds,nSeeds);
+F_Int   = NaN(nSeeds,nSeeds);
+p_Int   = NaN(nSeeds,nSeeds);
+
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        if i==j, continue; end
+
+        dataT1 = squeeze(allData_T1(i,j,:));
+        dataT4 = squeeze(allData_T4(i,j,:));
+
+        validIdx = ~isnan(dataT1) & ~isnan(dataT4);
+        if sum(validIdx)<6, continue; end
+
+        subjIDs_valid = subjectIDs(validIdx);
+        gLabels = cellfun(@(x) num_to_group(x), num2cell(subjIDs_valid), 'UniformOutput', false);
+
+        [~,p,~,stats] = ttest(dataT4(validIdx), dataT1(validIdx));
+        p_Time(i,j) = p;
+        F_Time(i,j) = stats.tstat.^2;
+
+        meanVals = mean([dataT1(validIdx), dataT4(validIdx)],2);
+        x1 = meanVals(strcmp(gLabels,'rTMS'));
+        x2 = meanVals(strcmp(gLabels,'Placebo'));
+        [~,p,~,stats] = ttest2(x1,x2);
+        p_Group(i,j) = p;
+        F_Group(i,j) = stats.tstat.^2;
+
+        delta = dataT4(validIdx) - dataT1(validIdx);
+        x1 = delta(strcmp(gLabels,'rTMS'));
+        x2 = delta(strcmp(gLabels,'Placebo'));
+        [~,p,~,stats] = ttest2(x1,x2);
+        p_Int(i,j) = p;
+        F_Int(i,j) = stats.tstat.^2;
+    end
+end
+
+%% === FDR-Korrektur ===
+fprintf('\n🔎 FDR-Korrektur (Benjamini-Hochberg)...\n');
+mask_offdiag = true(nSeeds);
+mask_offdiag(1:nSeeds+1:end) = false;
+
+vec_pg = p_Group(mask_offdiag);
+vec_pt = p_Time(mask_offdiag);
+vec_pi = p_Int(mask_offdiag);
+
+fdr_pg = mafdr(vec_pg, 'BHFDR', true);
+fdr_pt = mafdr(vec_pt, 'BHFDR', true);
+fdr_pi = mafdr(vec_pi, 'BHFDR', true);
+
+p_Group_FDR = NaN(nSeeds);
+p_Time_FDR  = NaN(nSeeds);
+p_Int_FDR   = NaN(nSeeds);
+
+p_Group_FDR(mask_offdiag) = fdr_pg;
+p_Time_FDR(mask_offdiag)  = fdr_pt;
+p_Int_FDR(mask_offdiag)   = fdr_pi;
+
+fprintf('✅ FDR-Korrektur abgeschlossen.\n');
+
+%% === Ergebnisse in Tabelle exportieren ===
+rows=[]; cols=[]; Fg=[]; pg=[]; Ft=[]; pt=[]; Fi=[]; pi=[];
+for i=1:nSeeds
+    for j=1:nSeeds
+        if i==j, continue; end
+        rows(end+1)=i; cols(end+1)=j;
+        Fg(end+1)=F_Group(i,j); pg(end+1)=p_Group(i,j);
+        Ft(end+1)=F_Time(i,j);  pt(end+1)=p_Time(i,j);
+        Fi(end+1)=F_Int(i,j);   pi(end+1)=p_Int(i,j);
+    end
+end
+
+indMat = @(r,c) r + (c-1)*nSeeds;
+
+resultsTable = table( ...
+    roiLabels(rows)', roiLabels(cols)', ...
+    Fg', pg', p_Group_FDR(indMat(rows,cols))', ...
+    Ft', pt', p_Time_FDR(indMat(rows,cols))', ...
+    Fi', pi', p_Int_FDR(indMat(rows,cols))', ...
+    'VariableNames',{'From','To', ...
+                     'F_Group','p_Group','p_Group_FDR', ...
+                     'F_Time','p_Time','p_Time_FDR', ...
+                     'F_Interaction','p_Interaction','p_Interaction_FDR'});
+
+writetable(resultsTable,'SeedToSeed_MixedANOVA_GroupTime.csv');
+fprintf('✅ Ergebnisse gespeichert: SeedToSeed_MixedANOVA_GroupTime.csv\n');
+
+%% === Signifikante Kanten (unkorrigiert) ===
+sigMask = (pg<0.05) | (pt<0.05) | (pi<0.05);
+sigRows = find(sigMask);
+sigTable = resultsTable(sigRows,:);
+writetable(sigTable,'SeedToSeed_MixedANOVA_GroupTime_SignificantOnly.csv');
+fprintf('✅ Signifikante unkorregierte Ergebnisse gespeichert: SeedToSeed_MixedANOVA_GroupTime_SignificantOnly.csv\n');
+
+%% === Signifikante Kanten (FDR-korrigiert) ===
+sigMask_FDR = (resultsTable.p_Group_FDR < 0.05) | ...
+              (resultsTable.p_Time_FDR  < 0.05) | ...
+              (resultsTable.p_Interaction_FDR < 0.05);
+
+sigTable_FDR = resultsTable(sigMask_FDR,:);
+writetable(sigTable_FDR,'SeedToSeed_MixedANOVA_GroupTime_FDR_SignificantOnly.csv');
+fprintf('✅ Signifikante FDR-korrigierte Ergebnisse gespeichert: SeedToSeed_MixedANOVA_GroupTime_FDR_SignificantOnly.csv\n');
+
+%% === Heatmaps: F-Werte ===
+figure; imagesc(F_Group); colorbar; title('F Haupteffekt Gruppe');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+figure; imagesc(F_Time); colorbar; title('F Haupteffekt Zeit');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+figure; imagesc(F_Int); colorbar; title('F Interaktion Gruppe×Zeit');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+%% === Heatmaps: Unkorrigierte p-Werte ===
+figure; imagesc(p_Group); colorbar;
+title('Unkorrigierte p-Werte (Gruppe)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90, ...
+    'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+figure; imagesc(p_Time); colorbar;
+title('Unkorrigierte p-Werte (Zeit)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90, ...
+    'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+figure; imagesc(p_Int); colorbar;
+title('Unkorrigierte p-Werte (Interaktion)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90, ...
+    'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+%% === Heatmaps: FDR-korrigierte p-Werte ===
+figure; imagesc(p_Group_FDR); colorbar;
+title('FDR-korrigierte p-Werte (Gruppe)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+figure; imagesc(p_Time_FDR); colorbar;
+title('FDR-korrigierte p-Werte (Zeit)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+
+figure; imagesc(p_Int_FDR); colorbar;
+title('FDR-korrigierte p-Werte (Interaktion)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
