@@ -1,0 +1,168 @@
+% =========================================================================
+% Seed-to-Seed 2nd-Level Analyse (asymmetrisch, spiderbird-Kontrast)
+% Mit ROI-Namen aus Masken, Visualisierung, Tabellenexport + FDR-Korrektur
+% =========================================================================
+
+% === Einstellungen ===
+dataDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
+roiDir  = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
+
+% === Kontrastdateien finden ===
+files = dir(fullfile(dataDir, '*Contrast_0005*spiderbird*.mat'));
+nSub = numel(files);
+fprintf('Gefundene Kontrastdateien: %d\n', nSub);
+
+if nSub == 0
+    error('❌ Keine passenden Kontrastdateien gefunden.');
+end
+
+% === Beispiel-Datei laden ===
+example = load(fullfile(dataDir, files(1).name));
+fn = fieldnames(example);
+matrix = example.(fn{1});
+[nSeeds1, nSeeds2] = size(matrix);
+
+if nSeeds1 ~= nSeeds2
+    warning('⚠️ Matrix ist nicht quadratisch (%d x %d)', nSeeds1, nSeeds2);
+end
+
+% === ROI-Namen aus NIfTI-Dateien extrahieren (auch Unterverzeichnisse) ===
+roiFilesStruct = [ ...
+    dir(fullfile(roiDir, '**', '*_masked.nii')); ...
+    dir(fullfile(roiDir, '**', '*_masked.nii.gz'))];
+roiFileNames = sort({roiFilesStruct.name});
+
+fprintf('ROI-Verzeichnis: %s\n', roiDir);
+fprintf('Gefundene ROI-Dateien: %d\n', numel(roiFileNames));
+
+roiLabels = cell(numel(roiFileNames), 1);
+for i = 1:numel(roiFileNames)
+    fname = roiFileNames{i};
+    fname = regexprep(fname, '\.nii(\.gz)?$', '');
+    roiLabels{i} = regexprep(fname, '_masked$', '');
+end
+
+% === Alle gefundenen ROI-Namen anzeigen ===
+disp('Verfügbare ROI-Labels:');
+disp(roiLabels');
+
+% === Alle verfügbaren ROIs verwenden ===
+selectedIdx = 1:numel(roiLabels);
+fprintf('\n✅ Alle %d verfügbaren ROIs werden verwendet:\n', numel(selectedIdx));
+disp(roiLabels);
+
+roiLabels = roiLabels(selectedIdx);
+
+% === Alle Matrizen einlesen und filtern ===
+allData = zeros(numel(selectedIdx), numel(selectedIdx), nSub);
+for i = 1:nSub
+    d = load(fullfile(dataDir, files(i).name));
+    matrix = d.(fn{1});
+    allData(:, :, i) = matrix(selectedIdx, selectedIdx);
+end
+
+nSeeds1 = numel(selectedIdx);
+nSeeds2 = nSeeds1;
+
+% === Mittelwertmatrix berechnen ===
+meanMat = mean(allData, 3);
+
+% === T-Tests durchführen ===
+tMat = NaN(nSeeds1, nSeeds2);
+pMat = NaN(nSeeds1, nSeeds2);
+for i = 1:nSeeds1
+    for j = 1:nSeeds2
+        if i == j
+            continue;
+        end
+        x = squeeze(allData(i, j, :));
+        [~, p, ~, stats] = ttest(x);
+        tMat(i, j) = stats.tstat;
+        pMat(i, j) = p;
+    end
+end
+
+% === FDR-Korrektur (Benjamini-Hochberg) ===
+fprintf('\n🔎 FDR-Korrektur (Benjamini-Hochberg)...\n');
+mask_offdiag = true(nSeeds1, nSeeds2);
+mask_offdiag(1:nSeeds1+1:end) = false;
+vec_p = pMat(mask_offdiag);
+
+if isempty(vec_p) || all(isnan(vec_p))
+    error('❌ Keine gültigen p-Werte vorhanden für die FDR-Korrektur.');
+end
+
+fdr_vec_p = mafdr(vec_p, 'BHFDR', true);
+pMat_FDR = NaN(size(pMat));
+pMat_FDR(mask_offdiag) = fdr_vec_p;
+sig_FDR_Mat = pMat_FDR < 0.05;
+fprintf('✅ Signifikante Verbindungen nach FDR: %d\n', nansum(sig_FDR_Mat(:)));
+
+% === Visualisierung ===
+figure; imagesc(meanMat);
+title('Mittelwert der PPI-Verbindungen (asymmetrisch)');
+xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
+set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
+set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+
+figure; imagesc(tMat);
+title('t-Werte'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
+set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
+set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+
+figure; imagesc(pMat < 0.05);
+title('Signifikant (p < 0.05)'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
+set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
+set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+
+significantMean = meanMat;
+significantMean(pMat >= 0.05) = NaN;
+figure; imagesc(significantMean);
+title('Mittelwerte p < 0.05'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
+set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
+set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+
+figure; imagesc(sig_FDR_Mat);
+title('Signifikant nach FDR'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
+set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
+set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+
+significantMeanFDR = meanMat;
+significantMeanFDR(~sig_FDR_Mat) = NaN;
+figure; imagesc(significantMeanFDR);
+title('Mittelwerte FDR-signifikant'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
+set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
+set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+
+% === Tabelle mit Verbindungen ===
+rows = []; cols = []; means = []; ts = []; ps = []; qvals = []; signif = []; signifFDR = [];
+
+for i = 1:nSeeds1
+    for j = 1:nSeeds2
+        if i == j, continue; end
+        rows(end+1)    = i;
+        cols(end+1)    = j;
+        means(end+1)   = meanMat(i, j);
+        ts(end+1)      = tMat(i, j);
+        ps(end+1)      = pMat(i, j);
+        qvals(end+1)   = pMat_FDR(i, j);
+        signif(end+1)  = pMat(i, j) < 0.05;
+        signifFDR(end+1) = pMat_FDR(i, j) < 0.05;
+    end
+end
+
+ROI_From = roiLabels(rows);
+ROI_To   = roiLabels(cols);
+
+resultsTable = table( ...
+    ROI_From(:), ROI_To(:), means(:), ts(:), ps(:), qvals(:), signif(:), signifFDR(:), ...
+    'VariableNames', {'From','To','Mean','T','p','q_FDR','Significant_p<.05','Significant_FDR'});
+
+disp(resultsTable(1:min(10, height(resultsTable)), :));
+sortedTable = sortrows(resultsTable, 'p');
+writetable(sortedTable, 'SeedToSeed_Results_Asymmetric.csv');
+fprintf('\n✅ Tabelle gespeichert: SeedToSeed_Results_Asymmetric.csv\n');
+
+signifOnly = sortedTable(sortedTable.Significant_FDR == 1, :);
+writetable(signifOnly, 'SeedToSeed_SignificantOnly_FDR_Asymmetric.csv');
+fprintf('✅ Nur FDR-signifikante Verbindungen gespeichert: SeedToSeed_SignificantOnly_FDR_Asymmetric.csv\n');
