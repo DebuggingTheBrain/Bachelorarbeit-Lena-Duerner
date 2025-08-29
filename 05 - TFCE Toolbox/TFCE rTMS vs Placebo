@@ -1,0 +1,39 @@
+%% ========================================================================
+%  TFCE nonparametric correction based on existing SPM.mat model
+%  File: tfce_rTMS_vs_placebo.m
+%  Description: TFCE-Korrektur für gemischtes ANOVA-Modell rTMS vs Placebo
+% ========================================================================
+
+% === Pfad zur bestehenden SPM.mat-Datei ================================
+spm_mat_path = 'F:\FMRIPREPRESULTFINAL\second_level\mixed_ANOVA_rTMS_vs_placebo\SPM.mat';
+
+% === Optional: Zusätzliche Maske (z. B. ROI) ===========================
+mask_path = '';  % oder z. B. 'F:\ROIs\DLPFC.nii'
+
+% === TFCE Parameter konfigurieren ======================================
+n_permutations   = 5000;     % Empfohlen: 5000–10000
+n_cores          = 5;        % Anzahl paralleler Prozesse (je nach CPU)
+contrast_index   = [5 6 7 8 9 10];  % Hier Kontrastnummern eintragen
+nuisance_method  = 0;        % 1 = Smith, 2 = Freedman-Lane (robuster)
+use_tbss_params  = 0;        % TBSS nur bei DTI/2D Daten = 1 setzen
+
+% === TFCE Batch definieren =============================================
+matlabbatch = [];
+
+matlabbatch{1}.spm.tools.tfce_estimate.data = {spm_mat_path};
+matlabbatch{1}.spm.tools.tfce_estimate.nproc = n_cores;
+matlabbatch{1}.spm.tools.tfce_estimate.mask = mask_path;
+matlabbatch{1}.spm.tools.tfce_estimate.conspec.titlestr = '';  % leer = auto
+matlabbatch{1}.spm.tools.tfce_estimate.conspec.contrasts = contrast_index;
+matlabbatch{1}.spm.tools.tfce_estimate.conspec.n_perm = n_permutations;
+matlabbatch{1}.spm.tools.tfce_estimate.nuisance_method = nuisance_method;
+matlabbatch{1}.spm.tools.tfce_estimate.tbss = use_tbss_params;
+matlabbatch{1}.spm.tools.tfce_estimate.singlethreaded = 1;
+
+% === SPM vorbereiten & ausführen =======================================
+spm('Defaults', 'fMRI');
+spm_jobman('initcfg');
+spm_jobman('run', matlabbatch);
+
+disp('✅ TFCE-Korrektur abgeschlossen für Kontraste:');
+disp(contrast_index);
