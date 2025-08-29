@@ -1,0 +1,52 @@
+% === Basispfade ========================================================
+spm_mat_path = 'F:\FMRIPREPRESULTFINAL\second_level\t1_rTMS_vs_placebo\SPM.mat';
+roi_dir = 'F:\FMRIPREPRESULTFINAL\ROIs_2_mni2009c\';
+
+% === Gewünschte ROI-Dateien (nur .nii) ================================
+roi_list = {
+    'DLPFC_in_MNI2009c.nii'
+    'Amygdala_L_in_MNI2009c.nii'
+    'Amygdala_R_in_MNI2009c.nii'
+    'Hippocampus_L_in_MNI2009c.nii'
+    'Hippocampus_R_in_MNI2009c.nii'
+};
+
+% === TFCE-Parameter konfigurieren ======================================
+n_permutations   = 5000;
+n_cores          = 5;
+contrast_index   = [1 2];
+nuisance_method  = 0;
+use_tbss_params  = 0;
+
+% === SPM vorbereiten ===================================================
+spm('Defaults', 'fMRI');
+spm_jobman('initcfg');
+
+% === Schleife durch gewählte ROIs ======================================
+for i = 1:length(roi_list)
+    
+    % ROI-Dateiname und Pfad
+    roi_name = roi_list{i};
+    mask_path = fullfile(roi_dir, roi_name);
+    
+    fprintf('🔄 Verarbeite ROI: %s\n', roi_name);
+    
+    % === TFCE-Batch definieren =========================================
+    matlabbatch = [];
+    matlabbatch{1}.spm.tools.tfce_estimate.data = {spm_mat_path};
+    matlabbatch{1}.spm.tools.tfce_estimate.nproc = n_cores;
+    matlabbatch{1}.spm.tools.tfce_estimate.mask = {mask_path};  % Maske als Zelle
+    matlabbatch{1}.spm.tools.tfce_estimate.conspec.titlestr = roi_name;
+    matlabbatch{1}.spm.tools.tfce_estimate.conspec.contrasts = contrast_index;
+    matlabbatch{1}.spm.tools.tfce_estimate.conspec.n_perm = n_permutations;
+    matlabbatch{1}.spm.tools.tfce_estimate.nuisance_method = nuisance_method;
+    matlabbatch{1}.spm.tools.tfce_estimate.tbss = use_tbss_params;
+    matlabbatch{1}.spm.tools.tfce_estimate.singlethreaded = 1;
+
+    % === TFCE-Batch ausführen ==========================================
+    spm_jobman('run', matlabbatch);
+
+    fprintf('✅ Fertig mit ROI: %s\n\n', roi_name);
+end
+
+disp('🎉 Alle ausgewählten TFCE-Korrekturen abgeschlossen!');
