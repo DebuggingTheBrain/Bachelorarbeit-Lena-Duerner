@@ -1,0 +1,92 @@
+%% ========================================================================
+%  TFCE Peak-/Cluster-Analyse
+%  Datei: analyze_tfce_clusters.m
+%  Beschreibung:
+%     Lädt ein TFCE-Ergebnisbild (z. B. TFCE_tcon_0005.nii), findet Peaks,
+%     berechnet Clustergrößen und speichert Ergebnisse als CSV.
+% ========================================================================
+
+% === Parameter einstellen ===============================================
+nii_path = 'F:\FMRIPREPRESULTFINAL\second_level\one_sample_ttest_T1\TFCE_log_pFWE_0002.nii';
+thr      = 0.0;           % Schwelle – 0 für alle positiven TFCE-Werte
+min_ext  = 0;             % Mindestclustergröße in Voxel
+
+% === Bild laden ========================================================
+V = spm_vol(nii_path);
+Y = spm_read_vols(V);
+
+% === Maske: nur gültige Voxel (keine NaNs) =============================
+msk = ~isnan(Y) & Y > thr;
+idx = find(msk);
+if isempty(idx)
+    error('❌ Keine Voxel über der Schwelle (thr = %.3f).', thr);
+end
+
+% === Clusterbildung über SPM ===========================================
+[I, J, K] = ind2sub(size(Y), idx);
+XYZ = [I'; J'; K'];
+CC = spm_clusters(XYZ);  % Clusterlabels
+
+% === Peak-Findung: größter Wert pro Cluster ============================
+vals = Y(idx);
+[vals_sorted, ord_all] = sort(vals, 'descend');
+CC_sorted = CC(ord_all);
+
+seen = false(max(CC),1);
+keep = false(size(ord_all));
+for i = 1:numel(ord_all)
+    c = CC_sorted(i);
+    if ~seen(c)
+        keep(i) = true;
+        seen(c) = true;
+    end
+end
+
+ord = ord_all(keep);
+idx_peaks = idx(ord);
+peak_vals = vals_sorted(keep);
+peak_CIDs = CC_sorted(keep);
+
+% === Clustergrößen bestimmen ===========================================
+Ksize = accumarray(CC(:), 1);
+Ksize = Ksize(:);
+peak_sizes = Ksize(peak_CIDs);
+
+% === MNI-Koordinaten berechnen =========================================
+[Ipk, Jpk, Kpk] = ind2sub(size(Y), idx_peaks);
+XYZvox = [Ipk Jpk Kpk ones(numel(idx_peaks),1)]';
+XYZmm  = V.mat * XYZvox;
+
+% === p-Wert berechnen (für TFCE = direkt interpretierbar?) =============
+% Optional – wenn deine Datei z.B. log(p) oder 1-p enthält, anpassen!
+is_logp = true;
+is_one_minus_p = false;
+if is_logp
+    peak_p = 10.^(-peak_vals);
+elseif is_one_minus_p
+    peak_p = 1 - peak_vals;
+else
+    peak_p = peak_vals;  % Achtung: hier nicht "echte" p-Werte, sondern TFCE-Werte
+end
+
+% === Tabelle zusammenbauen =============================================
+n = numel(idx_peaks);
+T = table( ...
+    peak_CIDs(:), ...
+    peak_vals(:), ...
+    peak_p(:), ...
+    XYZmm(1,:).', XYZmm(2,:).', XYZmm(3,:).', ...
+    peak_sizes(:), ...
+    'VariableNames', {'ClusterID','PeakValue','Peak_p','Xmm','Ymm','Zmm','ClusterSize'});
+
+% === Clustergrößenfilter ===============================================
+T = T(T.ClusterSize >= min_ext, :);
+
+% === Ausgabe anzeigen und speichern ====================================
+disp(T);
+
+% Speicherpfad definieren – im selben Ordner wie das NIfTI-Bild
+[pathstr, name, ~] = fileparts(nii_path);
+outcsv = fullfile(pathstr, [name '_cluster_peaks.csv']);
+writetable(T, outcsv);
+fprintf('✅ CSV gespeichert: %s\n', outcsv);
