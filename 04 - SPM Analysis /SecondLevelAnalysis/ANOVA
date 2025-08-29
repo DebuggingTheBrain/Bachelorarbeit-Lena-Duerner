@@ -1,0 +1,241 @@
+%% =========================================================================
+% Seed-to-Seed 2nd-Level Analyse (Mixed ANOVA Gruppe × Zeit, robust)
+%% =========================================================================
+
+% === Einstellungen ===
+t1Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
+t4Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T4\ROI_sets\angstt4\gPPI\ROI_to_ROI\asymmetrical';
+roiDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
+
+t1Pattern = '*Contrast_0005*spiderbird*.mat';
+t4Pattern = '*Contrast_0003*spiderbird*.mat';
+
+%% === Subject → Gruppe Mapping ===
+ids    = 1:22;
+groups = { 'rTMS', 'Placebo', 'rTMS', 'Placebo', ...
+           'Placebo', 'rTMS', 'rTMS', 'Placebo', ...
+           'Placebo', 'rTMS', 'rTMS', 'Placebo', ...
+           'rTMS', 'Placebo', 'Placebo', 'rTMS', ...
+           'rTMS', 'Placebo', 'rTMS', 'Placebo', ...
+           'Placebo', 'rTMS' };
+num_to_group = containers.Map(ids, groups);
+
+%% === T1 Dateien laden ===
+filesT1 = dir(fullfile(t1Dir, t1Pattern));
+nSub = numel(filesT1);
+fprintf('Gefundene T1 Dateien: %d\n', nSub);
+
+if nSub == 0
+    error('❌ Keine T1 Dateien gefunden.');
+end
+
+% Größen aller Matrizen sammeln
+allSizes = [];
+for i = 1:nSub
+    d = load(fullfile(t1Dir, filesT1(i).name));
+    fn = fieldnames(d);
+    m = d.(fn{1});
+    allSizes(end+1) = size(m,1);
+
+    subj_id = regexp(filesT1(i).name, 'Subject_(\d+)', 'tokens', 'once');
+    subj_id = str2double(subj_id{1});
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allSizes(end+1) = size(m4,1);
+    end
+end
+
+% kleinste gemeinsame Matrixgröße bestimmen
+nSeeds = min(allSizes);
+fprintf('👉 Verwende gemeinsame ROI-Anzahl: %d\n', nSeeds);
+
+% Speicher vorbereiten
+allData_T1 = NaN(nSeeds, nSeeds, nSub);
+allData_T4 = NaN(nSeeds, nSeeds, nSub);
+subjectIDs = NaN(nSub,1);
+
+% Matrizen laden & zuschneiden
+for i = 1:nSub
+    fnameT1 = filesT1(i).name;
+    subj_id = regexp(fnameT1, 'Subject_(\d+)', 'tokens', 'once');
+    if isempty(subj_id), continue; end
+    subj_id = str2double(subj_id{1});
+    subjectIDs(i) = subj_id;
+
+    % T1
+    d1 = load(fullfile(t1Dir, fnameT1));
+    fn = fieldnames(d1);
+    m1 = d1.(fn{1});
+    allData_T1(:,:,i) = m1(1:nSeeds, 1:nSeeds);
+
+    % T4
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allData_T4(:,:,i) = m4(1:nSeeds, 1:nSeeds);
+    else
+        fprintf('⚠️ Keine T4-Datei für Subject %d\n', subj_id);
+    end
+end
+
+%% === ROI Labels laden und auf gewünschte ROIs beschränken ===
+roiFilesStruct = dir(fullfile(roiDir, '*_masked.nii'));
+roiFileNames = sort({roiFilesStruct.name});
+roiLabelsFull = cellfun(@(x) regexprep(x, '_in_MNI2009c_masked\.nii$', ''), roiFileNames, 'UniformOutput', false);
+roiLabelsFull = roiLabelsFull(1:nSeeds);  % Nur übereinstimmende Anzahl wie Matrizen
+
+% === Nur bestimmte ROIs verwenden ===
+selectedROIs = {
+    'Amygdala_L'
+    'Amygdala_R'
+    'Cingulum_Ant_L'
+    'Combined_ROI_Sum'
+    'DLPFC'
+    'Hippocampus_L'
+    'Hippocampus_R'
+};
+
+% Indizes der gewünschten ROIs im Label-Array finden
+selectedIdx = find(ismember(roiLabelsFull, selectedROIs));
+
+% Fehlende ROIs anzeigen
+missingROIs = selectedROIs(~ismember(selectedROIs, roiLabelsFull));
+if ~isempty(missingROIs)
+    fprintf('❌ Die folgenden ROIs wurden nicht gefunden:\n');
+    disp(missingROIs');
+end
+
+if isempty(selectedIdx)
+    error('❌ Keine der gewünschten ROIs wurden in den geladenen Labels gefunden.');
+end
+
+% Labels und Matrizen auf ausgewählte ROIs zuschneiden
+roiLabels = roiLabelsFull(selectedIdx);
+allData_T1 = allData_T1(selectedIdx, selectedIdx, :);
+allData_T4 = allData_T4(selectedIdx, selectedIdx, :);
+nSeeds = numel(selectedIdx);
+fprintf('🎯 Analyse wird auf %d definierte ROIs beschränkt.\n', nSeeds);
+
+%% === Mixed ANOVA pro Verbindung (robust t-Test Variante) ===
+F_Group = NaN(nSeeds,nSeeds);
+p_Group = NaN(nSeeds,nSeeds);
+F_Time  = NaN(nSeeds,nSeeds);
+p_Time  = NaN(nSeeds,nSeeds);
+F_Int   = NaN(nSeeds,nSeeds);
+p_Int   = NaN(nSeeds,nSeeds);
+
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        if i==j, continue; end
+
+        dataT1 = squeeze(allData_T1(i,j,:));
+        dataT4 = squeeze(allData_T4(i,j,:));
+
+        validIdx = ~isnan(dataT1) & ~isnan(dataT4);
+        if sum(validIdx)<6, continue; end
+
+        subjIDs_valid = subjectIDs(validIdx);
+        gLabels = cellfun(@(x) num_to_group(x), num2cell(subjIDs_valid), 'UniformOutput', false);
+
+        % Haupteffekt Zeit
+        [~,p,~,stats] = ttest(dataT4(validIdx), dataT1(validIdx));
+        p_Time(i,j) = p;
+        F_Time(i,j) = stats.tstat.^2;
+
+        % Haupteffekt Gruppe
+        meanVals = mean([dataT1(validIdx), dataT4(validIdx)],2);
+        x1 = meanVals(strcmp(gLabels,'rTMS'));
+        x2 = meanVals(strcmp(gLabels,'Placebo'));
+        [~,p,~,stats] = ttest2(x1,x2);
+        p_Group(i,j) = p;
+        F_Group(i,j) = stats.tstat.^2;
+
+        % Interaktion
+        delta = dataT4(validIdx) - dataT1(validIdx);
+        x1 = delta(strcmp(gLabels,'rTMS'));
+        x2 = delta(strcmp(gLabels,'Placebo'));
+        [~,p,~,stats] = ttest2(x1,x2);
+        p_Int(i,j) = p;
+        F_Int(i,j) = stats.tstat.^2;
+    end
+end
+
+%% === FDR-Korrektur (Benjamini-Hochberg) ===
+fprintf('\n🔎 FDR-Korrektur (Benjamini-Hochberg) wird durchgeführt...\n');
+
+vec_p_Group = p_Group(:);
+vec_p_Time  = p_Time(:);
+vec_p_Int   = p_Int(:);
+
+fdr_p_Group = mafdr(vec_p_Group, 'BHFDR', true);
+fdr_p_Time  = mafdr(vec_p_Time,  'BHFDR', true);
+fdr_p_Int   = mafdr(vec_p_Int,   'BHFDR', true);
+
+fdr_p_Group = reshape(fdr_p_Group, size(p_Group));
+fdr_p_Time  = reshape(fdr_p_Time,  size(p_Time));
+fdr_p_Int   = reshape(fdr_p_Int,   size(p_Int));
+
+sig_FDR_Group = fdr_p_Group < 0.05;
+sig_FDR_Time  = fdr_p_Time  < 0.05;
+sig_FDR_Int   = fdr_p_Int   < 0.05;
+
+fprintf('✅ Signifikante Verbindungen nach FDR:\n');
+fprintf('- Gruppe:     %d\n', sum(sig_FDR_Group(:)));
+fprintf('- Zeit:       %d\n', sum(sig_FDR_Time(:)));
+fprintf('- Interaktion:%d\n', sum(sig_FDR_Int(:)));
+
+%% === Ergebnisse visualisieren ===
+figure; imagesc(F_Group); colorbar; title('F Haupteffekt Gruppe');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+figure; imagesc(F_Time); colorbar; title('F Haupteffekt Zeit (T4 vs. T1)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+figure; imagesc(F_Int); colorbar; title('F Interaktion Gruppe×Zeit');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,'YTick',1:nSeeds,'YTickLabel',roiLabels);
+
+%% === Ergebnisse in Tabelle exportieren ===
+rows=[]; cols=[]; Fg=[]; pg=[]; Ft=[]; pt=[]; Fi=[]; pi=[];
+for i=1:nSeeds
+    for j=1:nSeeds
+        if i==j, continue; end
+        rows(end+1)=i; cols(end+1)=j;
+        Fg(end+1)=F_Group(i,j); pg(end+1)=p_Group(i,j);
+        Ft(end+1)=F_Time(i,j);  pt(end+1)=p_Time(i,j);
+        Fi(end+1)=F_Int(i,j);   pi(end+1)=p_Int(i,j);
+    end
+end
+
+resultsTable = table( ...
+    roiLabels(rows)', roiLabels(cols)', ...
+    Fg', pg', Ft', pt', Fi', pi', ...
+    'VariableNames',{'From','To','F_Group','p_Group','F_Time','p_Time','F_Interaction','p_Interaction'});
+
+writetable(resultsTable,'SeedToSeed_MixedANOVA_GroupTime.csv');
+fprintf('\n✅ Ergebnisse gespeichert: SeedToSeed_MixedANOVA_GroupTime.csv\n');
+
+%% === Nur signifikante Kanten (p<0.05) exportieren ===
+sigMask = (pg<0.05) | (pt<0.05) | (pi<0.05);
+sigRows = find(sigMask);
+sigTable = resultsTable(sigRows,:);
+writetable(sigTable,'SeedToSeed_MixedANOVA_GroupTime_SignificantOnlyneuneu.csv');
+fprintf('✅ Signifikante Ergebnisse gespeichert: SeedToSeed_MixedANOVA_GroupTime_SignificantOnlyneuneu.csv\n');
+
+%% === FDR-signifikante Kanten exportieren ===
+rowsFDR = [];
+for i=1:nSeeds
+    for j=1:nSeeds
+        if i==j, continue; end
+        if sig_FDR_Group(i,j) || sig_FDR_Time(i,j) || sig_FDR_Int(i,j)
+            rowsFDR(end+1) = size(rowsFDR,2)+1;
+        end
+    end
+end
+sigTableFDR = resultsTable(rowsFDR,:);
+writetable(sigTableFDR,'SeedToSeed_MixedANOVA_GroupTime_FDR_SignificantOnlyneuneu.csv');
+fprintf('✅ FDR-signifikante Ergebnisse gespeichert: SeedToSeed_MixedANOVA_GroupTime_FDR_SignificantOnlyneuneu.csv\n');
