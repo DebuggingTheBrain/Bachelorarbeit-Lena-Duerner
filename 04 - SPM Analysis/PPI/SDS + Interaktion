@@ -1,0 +1,226 @@
+%% =========================================================================
+% Seed-to-Seed Analyse: SDS × Zeit × Gruppe Interaktion + Haupteffekte
+% + Direkter Kontrast rTMS > Placebo
+% Erweiterung: FDR-Korrektur + Effekt-Richtung + SDS-Interaktionsprüfung
+% + Heatmaps/Visualisierungen
+% =========================================================================
+
+% === Verzeichnisse & Dateinamen ===
+t1Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
+t4Dir = 'F:\FMRIPREPRESULTFINAL\TMFC_T4\ROI_sets\angstt4\gPPI\ROI_to_ROI\asymmetrical';
+roiDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
+
+t1Pattern = '*Contrast_0005*spiderbird*.mat';
+t4Pattern = '*Contrast_0003*spiderbird*.mat';
+
+% === Neue soq-Differenzwerte (geordnet!)
+spq_values_all = [-9, -1, 2, -3, -6, 4, -7, -2, -8, 3, ...
+                   1, -5, -6, -2, -3, -12, -1, -2, -8, -12, -2, 0];
+
+% === Gruppenzugehörigkeit (1 = rTMS, 0 = Placebo)
+group_all = [ ...
+    1, 0, 1, 0, 0, 1, 1, 0, 0, 1, ...
+    1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1];
+
+%% === T1-Dateien laden ===
+filesT1 = dir(fullfile(t1Dir, t1Pattern));
+subj_ids_tmp = cellfun(@(x) str2double(regexp(x, 'Subject_(\d+)', 'tokens', 'once')), {filesT1.name});
+[~, sortIdx] = sort(subj_ids_tmp);
+filesT1 = filesT1(sortIdx);
+subj_ids_tmp = subj_ids_tmp(sortIdx);
+nSub = numel(filesT1);
+fprintf('Gefundene T1 Dateien: %d\n', nSub);
+if nSub == 0, error('❌ Keine T1 Dateien gefunden.'); end
+
+% ROI-Größe bestimmen
+allSizes = [];
+for i = 1:nSub
+    d = load(fullfile(t1Dir, filesT1(i).name));
+    fn = fieldnames(d); m = d.(fn{1});
+    allSizes(end+1) = size(m,1);
+    subj_id = subj_ids_tmp(i);
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allSizes(end+1) = size(m4,1);
+    end
+end
+
+nSeeds = min(allSizes);
+fprintf('👉 Verwende gemeinsame ROI-Anzahl: %d\n', nSeeds);
+
+% Speicher vorbereiten
+allData_T1 = NaN(nSeeds, nSeeds, nSub);
+allData_T4 = NaN(nSeeds, nSeeds, nSub);
+subjectIDs = subj_ids_tmp(:);
+
+for i = 1:nSub
+    subj_id = subjectIDs(i);
+    d1 = load(fullfile(t1Dir, filesT1(i).name));
+    fn = fieldnames(d1); m1 = d1.(fn{1});
+    allData_T1(:,:,i) = m1(1:nSeeds, 1:nSeeds);
+    fnameT4 = sprintf('Subject_%04d_Contrast_0003_[spiderbird].mat', subj_id);
+    fpathT4 = fullfile(t4Dir, fnameT4);
+    if exist(fpathT4,'file')
+        d4 = load(fpathT4);
+        m4 = d4.(fn{1});
+        allData_T4(:,:,i) = m4(1:nSeeds, 1:nSeeds);
+    else
+        fprintf('⚠️ Keine T4-Datei für Subject %d\n', subj_id);
+    end
+end
+
+% SDS & Gruppen abgleichen
+if nSub < length(spq_values_all)
+    warning('⚠️ Kürze SDS/Gruppenvektoren.');
+    spq_values_all = spq_values_all(1:nSub);
+    group_all = group_all(1:nSub);
+elseif nSub > length(spq_values_all)
+    warning('⚠️ Kürze Daten.');
+    allData_T1 = allData_T1(:,:,1:length(spq_values_all));
+    allData_T4 = allData_T4(:,:,1:length(spq_values_all));
+    subjectIDs = subjectIDs(1:length(spq_values_all));
+    nSub = length(spq_values_all);
+end
+
+fprintf('✅ Verwende %d Subjekte mit SDS- und Gruppendaten.\n', nSub);
+
+% ROI-Labels laden
+roiFilesStruct = dir(fullfile(roiDir, '*_masked.nii'));
+roiFileNames = sort({roiFilesStruct.name});
+roiLabels = cellfun(@(x) regexprep(x, '_in_MNI2009c_masked\.nii$', ''), roiFileNames, 'UniformOutput', false);
+roiLabels = roiLabels(1:nSeeds);
+
+%% === Statistik: SDS × Gruppe (auf Δ = T4–T1)
+F_Int = NaN(nSeeds,nSeeds); p_Int = NaN(nSeeds,nSeeds); interaction_effect = NaN(nSeeds,nSeeds);
+
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        if i == j, continue; end
+        dataT1 = squeeze(allData_T1(i,j,:));
+        dataT4 = squeeze(allData_T4(i,j,:));
+        delta  = dataT4 - dataT1;
+        validIdx = ~isnan(dataT1) & ~isnan(dataT4);
+        if sum(validIdx) < 6, continue; end
+        y = delta(validIdx);
+        spq = spq_values_all(validIdx);
+        grp = group_all(validIdx);
+        X = [ones(length(y),1), spq(:), grp(:), spq(:).*grp(:)];
+        [b,~,~,~,stats] = regress(y, X);
+        F_Int(i,j) = stats(2);
+        p_Int(i,j) = stats(3);
+        interaction_effect(i,j) = b(4);
+    end
+end
+
+%% === Direkter Kontrast: rTMS > Placebo (Δ T4–T1) ===
+F_GrpDirect = NaN(nSeeds,nSeeds); p_GrpDirect = NaN(nSeeds,nSeeds);
+
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        if i == j, continue; end
+        delta = squeeze(allData_T4(i,j,:) - allData_T1(i,j,:));
+        validIdx = ~isnan(delta);
+        delta = delta(validIdx);
+        groupVals = group_all(validIdx);
+        if sum(groupVals == 1) < 3 || sum(groupVals == 0) < 3, continue; end
+        rTMS_vals = delta(groupVals == 1);
+        placebo_vals = delta(groupVals == 0);
+        [~, pval, ~, stats] = ttest2(rTMS_vals, placebo_vals);
+        p_GrpDirect(i,j) = pval;
+        F_GrpDirect(i,j) = stats.tstat^2;
+    end
+end
+
+%% === FDR-Korrektur (BH) auf den Gruppen-p-Werten ===
+fprintf('\n🔎 FDR-Korrektur (Benjamini-Hochberg)...\n');
+mask_offdiag = true(nSeeds, nSeeds); mask_offdiag(1:nSeeds+1:end) = false;
+vec_p = p_GrpDirect(mask_offdiag);
+valid_idx = ~isnan(vec_p); vec_p_valid = vec_p(valid_idx);
+fdr_vec_p = mafdr(vec_p_valid, 'BHFDR', true);
+p_GrpDirect_FDR = NaN(size(p_GrpDirect));
+temp = NaN(numel(vec_p),1); temp(valid_idx) = fdr_vec_p;
+p_GrpDirect_FDR(mask_offdiag) = temp;
+sig_FDR_mask = p_GrpDirect_FDR < 0.05;
+fprintf('✅ Signifikante Verbindungen nach FDR-Korrektur: %d\n', nansum(sig_FDR_mask(:)));
+
+%% === Effekt-Richtung + SDS-Interaktion bei FDR-signifikanten Verbindungen ===
+fprintf('\n📊 Analyse signifikanter FDR-Verbindungen:\n');
+[rowFDR, colFDR] = find(sig_FDR_mask);
+effect_directions = []; spq_interactions = [];
+
+for k = 1:length(rowFDR)
+    i = rowFDR(k); j = colFDR(k);
+    delta = squeeze(allData_T4(i,j,:) - allData_T1(i,j,:));
+    validIdx = ~isnan(delta);
+    groupVals = group_all(validIdx);
+    delta_valid = delta(validIdx);
+    delta_rTMS = delta_valid(groupVals == 1);
+    delta_placebo = delta_valid(groupVals == 0);
+    mean_rTMS = mean(delta_rTMS);
+    mean_placebo = mean(delta_placebo);
+    spq_p = p_Int(i,j);
+    spq_b = interaction_effect(i,j);
+    effect_directions(k,:) = [mean_placebo, mean_rTMS, mean_rTMS - mean_placebo];
+    spq_interactions(k,:) = [F_Int(i,j), spq_p, spq_b];
+    fprintf('%s → %s | Placebo: %.4f | rTMS: %.4f | Diff: %.4f | SDSxGroup-p: %.4f | Interaktions-Effekt: %.4f\n', ...
+        roiLabels{i}, roiLabels{j}, mean_placebo, mean_rTMS, mean_rTMS - mean_placebo, spq_p, spq_b);
+end
+
+%% === Ergebnisse exportieren (Tabelle) ===
+FDR_sig_table = table( ...
+    roiLabels(rowFDR)', roiLabels(colFDR)', ...
+    F_GrpDirect(sig_FDR_mask), ...
+    p_GrpDirect(sig_FDR_mask), ...
+    p_GrpDirect_FDR(sig_FDR_mask), ...
+    effect_directions(:,1), effect_directions(:,2), effect_directions(:,3), ...
+    spq_interactions(:,1), spq_interactions(:,2), spq_interactions(:,3), ...
+    spq_interactions(:,2) < 0.05, ...
+    'VariableNames', {'From','To','F','p_uncorr','p_FDR','MeanPlacebo','MeanRTMS','Diff','F_SDSxGroup','p_SDSxGroup','InteractionEffect','SDSxGroup_Significant'});
+
+writetable(FDR_sig_table,'SeedToSeed_FDRsignificant_EffectsWithSDSInteraction.csv');
+fprintf('📁 Exportiert: SeedToSeed_FDRsignificant_EffectsWithSDSInteraction.csv\n');
+
+%% === Visualisierungen / Heatmaps ===
+plot_labels = @(h,ttl) set(h, 'Name', ttl); % window title
+set(0,'DefaultFigureColor','w');
+
+% 1) SDS×Gruppe Interaktion (p-Werte)
+figure; imagesc(p_Int); colorbar;
+title('p: SDS × Gruppe (auf Δ T4–T1)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+plot_labels(gcf,'p_SDSxGroup');
+
+% 2) Direkter Gruppenvergleich: F-Werte
+figure; imagesc(F_GrpDirect); colorbar;
+title('F: rTMS > Placebo (Δ T4–T1)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+plot_labels(gcf,'F_rTMSvsPlacebo');
+
+% 3) Direkter Gruppenvergleich: p unkorrekt
+figure; imagesc(p_GrpDirect); colorbar;
+title('p (unkorrigiert): rTMS > Placebo (Δ T4–T1)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+plot_labels(gcf,'p_uncorr_rTMSvsPlacebo');
+
+% 4) FDR-korrigierte p-Werte
+figure; imagesc(p_GrpDirect_FDR); colorbar;
+title('p (FDR-korrigiert): rTMS > Placebo (Δ T4–T1)');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+caxis([0 0.1]);
+plot_labels(gcf,'p_FDR_rTMSvsPlacebo');
+
+% 5) Binärmaske FDR-signifikanter Verbindungen
+figure; imagesc(sig_FDR_mask); colorbar;
+title('FDR-signifikant (q<0.05): rTMS > Placebo');
+set(gca,'XTick',1:nSeeds,'XTickLabel',roiLabels,'XTickLabelRotation',90,...
+         'YTick',1:nSeeds,'YTickLabel',roiLabels);
+plot_labels(gcf,'Mask_FDR_significant');
