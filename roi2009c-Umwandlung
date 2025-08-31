@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# === INPUTS ===
+ROI_DIR="/mnt/f/FMRIPREPRESULTFINAL/ROIs_2"  # Windows-Laufwerk F: gemountet unter /mnt/f
+SOURCE_TEMPLATE="/mnt/f/Normalisierung/tpl-MNI152Lin_res-01_T1w.nii.gz"
+TARGET_TEMPLATE="/mnt/f/Normalisierung/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz"
+
+# Output warp prefix
+WARP_PREFIX="mniOld_to_mni2009c"
+
+# Output folder
+OUT_DIR="/mnt/f/FMRIPREPRESULTFINAL/ROIs_2_mni2009c"
+mkdir -p "$OUT_DIR"
+
+# === STEP 1: Registration between templates ===
+if [[ ! -f "${WARP_PREFIX}_1Warp.nii.gz" ]]; then
+    echo "Running template-to-template registration..."
+    antsRegistrationSyN.sh \
+      -d 3 \
+      -f "$TARGET_TEMPLATE" \
+      -m "$SOURCE_TEMPLATE" \
+      -o "${WARP_PREFIX}_" \
+      -n 4
+else
+    echo "Warp files already exist – skipping registration."
+fi
+
+# === STEP 2: Apply transforms to each ROI ===
+echo "Applying transforms to ROIs..."
+
+for ROI in ${ROI_DIR}/*.nii; do
+    ROI_NAME=$(basename "$ROI")
+    OUT_ROI="${OUT_DIR}/${ROI_NAME%.nii}_in_MNI2009c.nii.gz"
+
+    antsApplyTransforms \
+      -d 3 \
+      -i "$ROI" \
+      -r "$TARGET_TEMPLATE" \
+      -n NearestNeighbor \
+      -t "${WARP_PREFIX}_1Warp.nii.gz" \
+      -t "${WARP_PREFIX}_0GenericAffine.mat" \
+      -o "$OUT_ROI"
+
+    echo "✔ Transformed: $ROI_NAME → $OUT_ROI"
+done
+
+echo "✅ Alle ROIs wurden erfolgreich transformiert!"
