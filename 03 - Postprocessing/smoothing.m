@@ -1,3 +1,33 @@
+"""
+Titel: Automatisches Smoothing von fMRIPrep-BOLD-Daten  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript durchsucht fMRIPrep-Ergebnisse für jede(n) Proband*in (sub-*) und Session (ses-*).  
+Es identifiziert die vorverarbeiteten BOLD-Dateien mit der exakten Namenskonvention  
+`*_task-ep2dSpiderTask_dir-AP_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz`,  
+entpackt sie falls nötig und führt ein räumliches Smoothing mit einem FWHM von 6 mm in SPM durch.  
+Die gesmoothte Datei erhält das Präfix `s6_`.  
+
+Abhängigkeiten:  
+    - MATLAB R2022b (oder neuer)  
+    - SPM12 (für `spm_jobman`)  
+
+Input:  
+    - fMRIPrep-Ausgabeverzeichnis mit Struktur:  
+      `<basePath>/sub-*/ses-*/func/*_desc-preproc_bold.nii.gz`  
+
+Output:  
+    - Gesmoothte Dateien im jeweiligen `func`-Ordner mit Präfix `s6_`  
+
+Verwendung:  
+    - Pfad `basePath` im Skript anpassen  
+    - Skript in MATLAB ausführen  
+"""
+
+
+
 % Basis-Pfad anpassen
 basePath = 'F:\FMRIPREPRESULTFINAL';
 
@@ -65,3 +95,4 @@ function smoothing(scans)
     spm_jobman('run', matlabbatch);
     clear matlabbatch
 end
+
