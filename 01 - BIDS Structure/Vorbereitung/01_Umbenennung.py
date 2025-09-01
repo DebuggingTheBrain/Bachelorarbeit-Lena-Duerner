@@ -1,7 +1,28 @@
+"""
+Titel: Batch-Umbenennung von Ordnern und Dateien
+Autor: Lena Dürner
+Datum: 2025-09-01
+
+Beschreibung:
+    Dieses Skript benennt Ordner und Dateien in einem angegebenen Verzeichnis um.
+    Hauptordner erhalten ein Präfix (Standard: "sub-"), Unterordner und Dateien
+    erhalten ein Subpräfix (Standard: "ses-"). Dies erleichtert die Standardisierung
+    von Datensätzen für weitere Analysen.
+
+Abhängigkeiten:
+    - Python
+
+Input:
+    - Beliebiges Verzeichnis mit Unterordnern und/oder Dateien
+
+Output:
+    - Umbenannte Ordner und Dateien im gleichen Verzeichnis
+"""
+
 import os
 
 def rename_folders_and_files_with_prefix(directory, prefix="sub-", subprefix="ses-"):
-    # Gehe alle Elemente im angegebenen Verzeichnis durch
+    # alle Elemente im Verzeichnis werden durchgegangen 
     for item_name in os.listdir(directory):
         item_path = os.path.join(directory, item_name)
         
@@ -15,7 +36,7 @@ def rename_folders_and_files_with_prefix(directory, prefix="sub-", subprefix="se
             os.rename(item_path, new_item_path)
             print(f"Ordner '{item_name}' wurde zu '{new_item_name}' umbenannt")
 
-            # Jetzt die Unterordner im neu umbenannten Ordner umbenennen
+            # Unterordner im neu umbenannten Ordner umbenennen
             for subfolder_name in os.listdir(new_item_path):
                 subfolder_path = os.path.join(new_item_path, subfolder_name)
                 
@@ -46,6 +67,7 @@ def rename_folders_and_files_with_prefix(directory, prefix="sub-", subprefix="se
             os.rename(item_path, new_file_path)
             print(f"Datei '{item_name}' wurde zu '{new_file_name}' umbenannt")
 
-# Der Dateipfad, in dem die Umbenennung durchgeführt werden soll
+# Dateipfad für die Umbenennung 
 directory = r"F:\Dataset_5"
 rename_folders_and_files_with_prefix(directory)
+
