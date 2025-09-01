@@ -1,6 +1,35 @@
+"""
+Titel: fMRIPrep Batch Processing Script
+Autor: Lena Dürner
+Datum: 2025-09-01
+
+Beschreibung: Dieses Skript führt eine automatisierte Verarbeitung von fMRT-Daten 
+mittels fMRIPrep in einem Docker-Container durch. Es iteriert über alle 
+Subjekte im BIDS-Verzeichnis, prüft ob bereits Ergebnisse existieren, 
+und startet andernfalls die Verarbeitung mit angepasster Speicher- und Thread-Nutzung. 
+
+Abhängigkeiten:
+    - Bash
+    - Docker
+    - fMRIPrep (nipreps/fmriprep:latest)
+    - FreeSurfer Lizenzdatei
+
+Input:
+    - BIDS-Daten (z. B. /mnt/f/RESULTVER2)
+    - FreeSurfer Lizenzdatei (z. B. /mnt/c/Users/Herrmann_M/Desktop/license.txt)
+
+Output:
+    - fMRIPrep Ergebnisse (z. B. /mnt/f/FMRIPREPRESULTFINAL)
+
+Verwendung:
+    bash run_fmriprep_batch.sh
+"""
+
+
+
 #!/bin/bash
 
-# ====== Benutzerdefinierte Eingaben ======
+# ====== Benutzerdefinierte Eingaben - Pfade bei Bedarf anpassen  ======
 bids_root_dir="/mnt/f/RESULTVER2"
 output_dir="/mnt/f/FMRIPREPRESULTFINAL"
 fs_license="/mnt/c/Users/Herrmann_M/Desktop/license.txt"
@@ -8,11 +37,11 @@ fs_license="/mnt/c/Users/Herrmann_M/Desktop/license.txt"
 nthreads=8
 mem=28 # in GB
 
-# ====== Speicher anpassen ======
+# ====== Speicher anpassen ==============================================
 mem=$(echo "${mem//[!0-9]/}") # Entfernt Nicht-Zahlen (z.B. "GB")
 mem_mb=$(( (mem * 1024) - 5000 )) # 5GB Puffer
 
-# ====== Arbeitsverzeichnis für fMRIPrep (wird innerhalb des Containers genutzt) ======
+# ====== Arbeitsverzeichnis für fMRIPrep  ======
 work_dir="/mnt/f/fmriprep_work"
 
 # ====== Durchlaufe alle Subjekte im BIDS-Ordner ======
