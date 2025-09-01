@@ -4,7 +4,7 @@
 % Datum:    2025-09-01
 %
 % Beschreibung:
-%   Führt die Parameterschätzung (Classical/OLS) für alle Subjekte (sub-*)
+%   Führt die Parameterschätzung für alle Subjekte (sub-*)
 %   und Sessions (ses-*) durch – passend zum zuvor erzeugten Design in
 %   `FL_All`. Residualbilder werden mitgeschrieben
 %   (`write_residuals = 1`).
@@ -72,4 +72,5 @@ end
 % =============================================================================
 % ENDE DES SKRIPTS
 % =============================================================================
+
 
