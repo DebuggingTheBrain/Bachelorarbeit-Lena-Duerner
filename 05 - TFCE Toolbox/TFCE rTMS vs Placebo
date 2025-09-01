@@ -1,8 +1,34 @@
-%% ========================================================================
-%  TFCE nonparametric correction based on existing SPM.mat model
-%  File: tfce_rTMS_vs_placebo.m
-%  Description: TFCE-Korrektur für gemischtes ANOVA-Modell rTMS vs Placebo
-% ========================================================================
+% =========================================================================
+% Titel:    TFCE-Korrektur für gemischtes ANOVA-Modell (rTMS vs Placebo)
+% Autor:    Lena Dürner
+% Datum:    2025-09-01
+%
+% Beschreibung:
+%   Führt eine nichtparametrische TFCE-Korrektur (Permutationstest) für
+%   ausgewählte Kontraste aus einem bestehenden SPM Second-Level-Modell
+%   durch (z. B. Mixed ANOVA rTMS vs Placebo). Optional kann eine zusätzliche
+%   Maskendatei (ROI) angegeben werden.
+%
+%   Unterstützt parallele Verarbeitung und flexible Wahl der Kontrastnummern.
+%
+% Abhängigkeiten:
+%   - MATLAB R2022b (oder neuer)
+%   - SPM12 mit TFCE-Toolbox (`spm.tools.tfce_estimate`)
+%
+% Input:
+%   - SPM.mat aus Second-Level-Design
+%   - Optional: NIfTI-Maske zur Einschränkung der Analyse
+%
+% Output:
+%   - TFCE-korrigierte Ergebnisbilder im Zielordner
+%     (z. B. `spmT_0005_TFCE_corrp.nii`, `TFCE_zstat.nii`, etc.)
+%
+% Verwendung:
+%   - Pfad zu `spm_mat_path` und optional `mask_path` anpassen
+%   - Kontrastnummern in `contrast_index` definieren
+%   - Skript in MATLAB ausführen
+% =========================================================================
+
 
 % === Pfad zur bestehenden SPM.mat-Datei ================================
 spm_mat_path = 'F:\FMRIPREPRESULTFINAL\second_level\mixed_ANOVA_rTMS_vs_placebo\SPM.mat';
@@ -35,5 +61,5 @@ spm('Defaults', 'fMRI');
 spm_jobman('initcfg');
 spm_jobman('run', matlabbatch);
 
-disp('✅ TFCE-Korrektur abgeschlossen für Kontraste:');
+disp(' TFCE-Korrektur abgeschlossen für Kontraste:');
 disp(contrast_index);
