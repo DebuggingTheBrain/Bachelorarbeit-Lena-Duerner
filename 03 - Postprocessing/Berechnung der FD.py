@@ -1,3 +1,34 @@
+"""
+Titel: Framewise Displacement (FD) Qualitätskontrolle für fMRIPrep-Daten  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript überprüft Bewegungsartefakte in fMRIPrep-Ausgaben anhand der Spalte  
+`framewise_displacement` in den Confounds-Dateien.  
+Es berechnet:  
+- Mittlere Framewise Displacement (mean_FD)  
+- Anzahl von Volumes mit FD > 0.5 mm  
+- Prozentsatz von Volumes mit FD > 0.5 mm  
+
+Ein Run wird als **FAIL** markiert, wenn:  
+- `mean_FD > 0.2 mm` oder  
+- mehr als 20 % der Volumes `FD > 0.5 mm` aufweisen.  
+
+Abhängigkeiten:  
+    - Python 3.10  
+    - pandas >= 2.0  
+
+Input:  
+    - `<base_dir>/sub-*/ses-*/func/*desc-confounds_timeseries.tsv`  
+
+Output:  
+    - `FD_QC_Summary.csv` (Tabelle mit QC-Metriken und FAIL-Flag)  
+
+"""
+
+
+
 import pandas as pd
 import glob
 import os
@@ -62,4 +93,5 @@ print(results_df.to_string(index=False))
 output_file = os.path.join(base_dir, "FD_QC_Summary.csv")
 results_df.to_csv(output_file, index=False)
 print(f"\n Ergebnisse gespeichert in: {output_file}")
+
 
