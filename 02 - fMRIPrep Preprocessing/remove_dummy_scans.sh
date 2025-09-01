@@ -1,3 +1,29 @@
+"""
+Titel: Dummy-Scan Removal Script für fMRT-Daten
+Autor: Lena Dürner
+Datum: 2025-09-01
+
+Beschreibung: Dieses Skript entfernt die ersten 5 Dummy-Scans aus allen funktionellen
+NIfTI-Dateien in einem BIDS-Verzeichnis. Es erstellt dabei eine Logdatei, die 
+für jede Datei sowohl die ursprüngliche als auch die verbleibende Volumenanzahl dokumentiert.
+
+Abhängigkeiten:
+    - Bash
+    - FSL (fslinfo, fslroi)
+    - GNU Core Utilities (find, grep, awk)
+
+Input:
+    - BIDS-Verzeichnis mit funktionellen NIfTI-Dateien (*.nii.gz)
+
+Output:
+    - Angepasste NIfTI-Dateien (mit entfernten Dummy-Scans, Original wird überschrieben)
+    - Logdatei: dummy_removal_log.txt
+
+Verwendung:
+    bash remove_dummy_scans.sh
+"""
+
+
 #!/bin/bash
 
 # Verzeichnis mit BIDS-Daten (angepasst für Windows unter WSL/Git Bash)
