@@ -1,3 +1,32 @@
+: '
+Titel: Automatisierte MRIQC-Analyse für BIDS-Daten  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript führt eine Qualitätskontrolle von fMRT-Daten mit **MRIQC** (Docker-Version) durch.  
+Es iteriert über alle `sub-*` Ordner im BIDS-Verzeichnis, startet die participant-Level-Analyse  
+mit definierter Thread- und Speicheranzahl und speichert die Ergebnisse für jedes Subjekt separat.  
+Anschließend wird eine Gruppenanalyse auf allen Subjekten durchgeführt.  
+
+Abhängigkeiten:  
+    - Bash  
+    - Docker  
+    - MRIQC Docker-Image (`nipreps/mriqc:24.0.2` für Teilnehmer-Analysen,  
+      `nipreps/mriqc:21.0.0rc2` für Gruppenanalyse)  
+
+Input:  
+    - BIDS-Verzeichnis: `$bidsdir/sub-*`  
+
+Output:  
+    - `$topdir/derivatives/mriqc/<subj>/` (Einzelergebnisse pro Subjekt)  
+    - `$topdir/derivatives/mriqc/group_bold.html` (Gruppen-Reports)  
+
+Verwendung:  
+    bash run_mriqc.sh  
+'
+
+
 #!/bin/bash
 
 topdir=/mnt/f/RESULTVER2
