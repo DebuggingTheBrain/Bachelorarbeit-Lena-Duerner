@@ -1,9 +1,32 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Skript zur FIRSTLEVEL Model Estimation in MATLAB
-% Alle Sessions und Subjekte – passend zum Spezifikations-Skript (FL_All)
-% Autorin: Lena Dürner (angepasst)
-% Letzte Änderung: 12.08.2025 (Residualbilder aktiviert)
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% =========================================================================
+% Titel:    SPM First-Level Model Estimation (mit Residualbildern)
+% Autor:    Lena Dürner
+% Datum:    2025-09-01
+%
+% Beschreibung:
+%   Führt die Parameterschätzung (Classical/OLS) für alle Subjekte (sub-*)
+%   und Sessions (ses-*) durch – passend zum zuvor erzeugten Design in
+%   `FL_All`. Residualbilder werden mitgeschrieben
+%   (`write_residuals = 1`).
+%
+% Abhängigkeiten:
+%   - MATLAB R2022b (oder neuer)
+%   - SPM12 (spm_jobman)
+%
+% Input:
+%   - base_dir/sub-*/ses-*/FL_All/SPM.mat  (aus dem Spezifikations-Skript)
+%
+% Output:
+%   - base_dir/sub-*/ses-*/FL_All/
+%       * beta_*.nii, ResMS.nii, RPV.nii, mask.nii, SPM.mat (aktualisiert)
+%       * ResI_*.nii  (Residualbilder, aktiviert)
+%
+% Verwendung:
+%   - Pfad `base_dir` prüfen/anpassen
+%   - Skript in MATLAB ausführen
+% =========================================================================
+
+
 
 base_dir = 'F:\FMRIPREPRESULTFINAL\';
 
@@ -25,7 +48,7 @@ for s = 1:numel(subs)
         spm_path = fullfile(fl_dir, 'SPM.mat');
 
         if ~isfile(spm_path)
-            warning('⚠️  SPM.mat nicht gefunden: %s – wird übersprungen.', spm_path);
+            warning('  SPM.mat nicht gefunden: %s – wird übersprungen.', spm_path);
             continue
         end
 
@@ -39,9 +62,9 @@ for s = 1:numel(subs)
         try
             spm('defaults', 'FMRI');
             spm_jobman('run', matlabbatch);
-            fprintf('✅ Estimation abgeschlossen (mit Residuals): %s | %s\n', sub_name, ses_name);
+            fprintf(' Estimation abgeschlossen (mit Residuals): %s | %s\n', sub_name, ses_name);
         catch ME
-            warning('❌ Fehler bei %s | %s: %s', sub_name, ses_name, ME.message);
+            warning(' Fehler bei %s | %s: %s', sub_name, ses_name, ME.message);
         end
     end
 end
@@ -49,3 +72,4 @@ end
 % =============================================================================
 % ENDE DES SKRIPTS
 % =============================================================================
+
