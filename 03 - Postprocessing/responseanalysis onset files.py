@@ -1,3 +1,30 @@
+"""
+Titel: Validitätsprüfung von Blöcken in Logfiles  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript durchsucht alle `part2_eventtype.txt`-Logfiles in einem Wurzelverzeichnis.  
+Für jedes Subjekt (`sub-*`) und jede Session (`ses-*`) werden die geänderten Stimuli (`changed`)  
+identifiziert und den Blöcken *Spider* oder *Bird* zugeordnet.  
+Ein Block wird als **gültig** markiert, wenn die Spalte `Response == 2` ist, andernfalls als **ungültig**.  
+Die Ergebnisse werden in einer Textdatei zusammengefasst.  
+
+Abhängigkeiten:  
+    - Python 3.10  
+    - pandas >= 2.0  
+
+Input:  
+    - Logfiles: `<log_root>/sub-*/ses-*/...part2_eventtype.txt`  
+
+Output:  
+    - `valid_blocks_log.txt` (Liste der Blöcke mit Gültigkeitsstatus)  
+
+Verwendung:  
+    python check_valid_blocks.py  
+"""
+
+
 import os
 import pandas as pd
 
@@ -52,4 +79,5 @@ with open(output_file, "w", encoding="utf-8") as f:
         f.write(line + "\n")
 
 print(f"Analyse abgeschlossen. Ergebnisse in {output_file}")
+
 
