@@ -1,3 +1,39 @@
+% =========================================================================
+% Titel:    SPM First-Level Modell-Spezifikation mit fMRIPrep-Confounds
+% Autor:    Lena Dürner
+% Datum:    2025-09-01
+%
+% Beschreibung:
+%   Dieses Skript erstellt für jede(n) Proband*in (sub-*) und Session (ses-*)
+%   eine SPM-First-Level-Spezifikation. Verwendet werden:
+%     - gesmoothete BOLD-Datei (Präfix s6_) aus fMRIPrep
+%     - Onset-/Duration-Informationen aus .mat (names, onsets, durations)
+%     - Confounds-TSV (fMRIPrep) für 6 Bewegungsregressoren und
+%       alle motion_outlier*-Spalten (0/1-Dummys)
+%   Einstellungen:
+%     - TR = 2.48 s, Einheiten = Sekunden
+%     - HRF ohne Derivate, HPF = 128 s, cvi = 'AR(1)'
+%     - Keine zusätzliche Maske; mthresh = 0.8
+%   Für jede Kombination aus sub/ses wird ein Modellordner `FL_All` erstellt.
+%
+% Abhängigkeiten:
+%   - MATLAB R2022b (oder neuer)
+%   - SPM12 (inkl. spm_jobman)
+%
+% Input:
+%   - base_dir/sub-*/ses-*/func/s6_*_desc-preproc_bold.nii
+%   - onset_base_dir/sub-*/ses-*/func/onset_new/*part1*.mat
+%   - base_dir/sub-*/ses-*/func/*_desc-confounds_timeseries.tsv
+%
+% Output:
+%   - base_dir/sub-*/ses-*/FL_All/SPM.mat (+ Designfiles)
+%
+% Verwendung:
+%   - Pfade `base_dir` und `onset_base_dir` prüfen/anpassen
+%   - Skript in MATLAB ausführen
+% =========================================================================
+
+
 % --- Parameter & Pfade wie bei dir oben ---
 base_dir = 'F:\FMRIPREPRESULTFINAL\';
 onset_base_dir = 'F:\LOG_MAT_FILES5\';
@@ -142,4 +178,5 @@ for s = 1:length(subs)
         fprintf('SPM Modell-Spezifikation abgeschlossen für %s %s\n', sub_name, ses_name);
     end
 end
+
 
