@@ -1,10 +1,27 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Skript zur Umwandlung der onset files für SPM
-% Berücksichtigung der unterschiedlichen Events: spider, bird, fixation und instruction
-% automatisches Einlesen der Dateien für jedes Subjekt und jede Session
-% Autorin: Lena Dürner
-% letzte Änderung: 25.06.2025
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+"""
+Titel: Umwandlung von Onset-Files für SPM  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript verarbeitet Logfiles aus fMRT-Experimenten und wandelt sie in Onset-Dateien für SPM um.  
+Es berücksichtigt die Ereignistypen *spider*, *bird*, *fixation* und *instruction*.  
+Die Onsets werden automatisch für jedes Subjekt und jede Session extrahiert und in .mat-Dateien gespeichert.  
+
+Abhängigkeiten:  
+    - MATLAB R2022b (oder neuer)  
+
+Input:  
+    - Logfiles im Format: `ses-*_subject_trial.txt` (enthält Events und Zeitstempel)  
+
+Output:  
+    - `<sub>/<ses>/func/onset_new/*_onsets_durations_names.mat` (MATLAB-Dateien mit Onsets, Durations, Names)  
+
+Verwendung:  
+    - Pfade zu `input_root` und `output_root` im Skript anpassen  
+    - Skript in MATLAB ausführen  
+"""
+
 
 
 clear;
@@ -133,3 +150,4 @@ disp('Fertig: Onsets und Durations für birdpic, spiderpic, fixation und instr e
 % ========================================================================
 % ENDE DES SKRIPTS
 % ======================================================================== 
+
