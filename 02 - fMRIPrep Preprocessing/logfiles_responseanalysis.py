@@ -1,14 +1,40 @@
+"""
+Titel: Logfile-Analyse für Block-Gültigkeit
+Autor: Lena Dürner
+Datum: 2025-09-01
+
+Beschreibung: Dieses Skript durchsucht rekursiv Logfiles eines Experiments, 
+extrahiert aus den Dateien mit Endung `part2_eventtype.txt` die relevanten Informationen 
+und bestimmt die Gültigkeit von Blöcken (Spider oder Bird), basierend auf den Responses. 
+Die Ergebnisse werden als Textdatei gespeichert.
+
+Abhängigkeiten:
+    - Python 3.10
+    - pandas >= 2.0
+
+Input:
+    - Logfiles im Wurzelverzeichnis (z. B. F:\LOG_FILES), 
+      insbesondere Dateien mit Endung `part2_eventtype.txt`
+
+Output:
+    - Textdatei: valid_blocks_log.txt (mit Gültigkeitsangaben zu allen Blöcken)
+
+Verwendung:
+    python analyze_valid_blocks.py
+"""
+
+
 import os
 import pandas as pd
 
-# 🔧 Verzeichnis mit den Logfiles
+# Verzeichnis mit den Logfiles
 log_root = r"F:\LOG_FILES"
 
-# 🔧 Ausgabe-Datei
+# Ausgabe-Datei
 output_file = "valid_blocks_log.txt"
 results = []
 
-# 🔁 Alle Pfade durchlaufen
+# Alle Pfade durchlaufen
 for root, dirs, files in os.walk(log_root):
     for file in files:
         if file.endswith("part2_eventtype.txt"):
@@ -19,12 +45,12 @@ for root, dirs, files in os.walk(log_root):
                 if 'Code' not in df.columns or 'Response' not in df.columns:
                     continue
 
-                # 🔍 Extrahiere VP und Session (T1-T4)
+                # Extrahiere VP und Session (T1-T4)
                 parts = full_path.split(os.sep)
                 vp = [p for p in parts if p.startswith("sub-")][0].replace("sub-", "")
                 session = [p for p in parts if p.startswith("ses-")][0].replace("ses-", "")
 
-                # 🔀 Blöcke finden (alle 'changed' Bilder)
+                # Blöcke finden (alle 'changed' Bilder)
                 changed_rows = df[df['Code'].astype(str).str.contains("changed", case=False, na=False)]
 
                 for idx, row in changed_rows.iterrows():
@@ -46,9 +72,10 @@ for root, dirs, files in os.walk(log_root):
             except Exception as e:
                 print(f"Fehler bei Datei: {full_path} -> {e}")
 
-# 💾 Schreibe Ergebnisse
+# Schreibe Ergebnisse
 with open(output_file, "w", encoding="utf-8") as f:
     for line in results:
         f.write(line + "\n")
 
-print(f"✅ Analyse abgeschlossen. Ergebnisse in {output_file}")
+print(f" Analyse abgeschlossen. Ergebnisse in {output_file}")
+
