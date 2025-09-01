@@ -63,7 +63,7 @@ for i = 1:length(roi_list)
     roi_name = roi_list{i};
     mask_path = fullfile(roi_dir, roi_name);
     
-    fprintf('🔄 Verarbeite ROI: %s\n', roi_name);
+    fprintf(' Verarbeite ROI: %s\n', roi_name);
     
     % === TFCE-Batch definieren =========================================
     matlabbatch = [];
@@ -80,7 +80,7 @@ for i = 1:length(roi_list)
     % === TFCE-Batch ausführen ==========================================
     spm_jobman('run', matlabbatch);
 
-    fprintf('✅ Fertig mit ROI: %s\n\n', roi_name);
+    fprintf(' Fertig mit ROI: %s\n\n', roi_name);
 end
 
-disp('🎉 Alle ausgewählten TFCE-Korrekturen abgeschlossen!');
+disp(' Alle ausgewählten TFCE-Korrekturen abgeschlossen!');
