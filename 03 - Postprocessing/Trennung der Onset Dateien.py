@@ -1,8 +1,31 @@
-#-----------------------------------------------------#
-#Skript zur Trennung der onset Dateien in zwei unterschiedliche Dateien 
-#Autorin: Lena Dürner
-#letzte Änderung: 26.06.2025
-#-----------------------------------------------------#
+"""
+Titel: Auftrennung von Logfiles in Trial- und Eventtype-Dateien  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript durchsucht ein Quellverzeichnis nach `.log`-Dateien und trennt jede Datei anhand  
+eines definierten Headers (`Event Type ...`) in zwei Abschnitte:  
+- **Teil 1**: Subject-Trial-Informationen  
+- **Teil 2**: Eventtype-Informationen  
+
+Die getrennten Abschnitte werden als neue Textdateien im Zielverzeichnis gespeichert, wobei die  
+Originalordnerstruktur beibehalten wird.  
+
+Abhängigkeiten:  
+    - Python 3.10  
+
+Input:  
+    - `<source_root>/*.log` (z. B. aus Behavioral-Experimenten)  
+
+Output:  
+    - `<target_root>/*_part1_subject_trial.txt`  
+    - `<target_root>/*_part2_eventtype.txt`  
+
+Verwendung:  
+    python split_logfiles.py  
+"""
+
 
 
 
@@ -50,12 +73,13 @@ for root, dirs, files in os.walk(source_root):
                 with open(out2, "w", encoding="utf-8") as f2:
                     f2.writelines(part2_lines)
 
-                print(f"✓ Getrennt gespeichert: {file} → {target_dir}")
+                print(f" Getrennt gespeichert: {file} → {target_dir}")
             else:
-                print(f"⚠️ Trenn-Header nicht gefunden in Datei: {log_path}")
+                print(f" Trenn-Header nicht gefunden in Datei: {log_path}")
 
 
 # ========================================================================
 # ENDE DES SKRIPTS
 # ========================================================================
+
 
