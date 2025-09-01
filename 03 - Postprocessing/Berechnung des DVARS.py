@@ -1,3 +1,33 @@
+"""
+Titel: DVARS-Qualitätskontrolle für fMRIPrep-Ausgaben  
+Autor: Lena Dürner  
+Datum: 2025-09-01  
+
+Beschreibung:  
+Dieses Skript durchsucht fMRIPrep-Ausgaben nach Confounds-Dateien (`*desc-confounds_timeseries.tsv`)  
+und berechnet für jede Datei Qualitätsmetriken auf Basis der **DVARS**-Spalte:  
+- Standardabweichung der DVARS  
+- Median der DVARS  
+- Anzahl von Spikes oberhalb des 1.5-fachen Medians  
+
+Ein Run wird als **FAIL** markiert, wenn die Standardabweichung > 4.5 ist oder mehr als 10 Spikes auftreten.  
+Fehlende DVARS-Spalten führen ebenfalls automatisch zu einem Ausschluss.  
+
+Abhängigkeiten:  
+    - Python 3.10  
+    - pandas >= 2.0  
+
+Input:  
+    - `<root_dir>/sub-*/ses-*/func/*desc-confounds_timeseries.tsv`  
+
+Output:  
+    - `dvars_with_fail_flag.csv` (enthält Subject, Session, DVARS-Metriken und FAIL-Flag)  
+
+Verwendung:  
+    python check_dvars_fail.py  
+"""
+
+
 import os
 import glob
 import pandas as pd
@@ -40,10 +70,11 @@ for file in tsv_files:
         })
 
     except Exception as e:
-        print(f"⚠️ Fehler bei Datei {file}: {e}")
+        print(f" Fehler bei Datei {file}: {e}")
 
 # Speichern als CSV
 output_df = pd.DataFrame(results)
 output_df.to_csv("dvars_with_fail_flag.csv", index=False)
 
-print("✅ Fertig! Datei 'dvars_with_fail_flag.csv' enthält jetzt auch die FAIL-Kennzeichnung.")
+print(" Fertig! Datei 'dvars_with_fail_flag.csv' enthält jetzt auch die FAIL-Kennzeichnung.")
+
