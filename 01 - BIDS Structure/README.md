@@ -24,6 +24,7 @@ Die Skripte dienen dazu, Rohdaten konsistent zu strukturieren, Dateien zu normal
 Installation (falls benötigt):
 ```bash
 pip install pandas numpy rpy2
+```
 
 
 Zur Vereinheitlichung der Datenstruktur wird die **BIDS-Struktur** verwendet.  
