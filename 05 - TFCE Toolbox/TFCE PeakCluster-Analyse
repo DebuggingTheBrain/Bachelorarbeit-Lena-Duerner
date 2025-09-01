@@ -1,10 +1,35 @@
-%% ========================================================================
-%  TFCE Peak-/Cluster-Analyse
-%  Datei: analyze_tfce_clusters.m
-%  Beschreibung:
-%     Lädt ein TFCE-Ergebnisbild (z. B. TFCE_tcon_0005.nii), findet Peaks,
-%     berechnet Clustergrößen und speichert Ergebnisse als CSV.
-% ========================================================================
+% =========================================================================
+% Titel:    TFCE Peak-/Cluster-Analyse für SPM-Ergebnisbilder
+% Autor:    Lena Dürner
+% Datum:    2025-09-01
+%
+% Beschreibung:
+%   Dieses Skript lädt ein TFCE-Ergebnisbild (z. B. log(p)-Map) aus einer
+%   SPM-Second-Level-Analyse und identifiziert statistisch signifikante
+%   Cluster. Es extrahiert:
+%     - Peakwerte
+%     - Clustergrößen
+%     - MNI-Koordinaten der Peaks
+%     - geschätzte p-Werte (optional aus log(p) ableitbar)
+%
+%   Das Ergebnis wird als Tabelle (`.csv`) im gleichen Verzeichnis gespeichert.
+%
+% Abhängigkeiten:
+%   - MATLAB R2022b (oder neuer)
+%   - SPM12 (für `spm_vol`, `spm_read_vols`, `spm_clusters`)
+%
+% Input:
+%   - Eine TFCE-NIfTI-Datei, z. B. `TFCE_log_pFWE_0002.nii`
+%
+% Output:
+%   - `<gleicher Ordner>/TFCE_log_pFWE_0002_cluster_peaks.csv`
+%     → Tabelle mit ClusterID, Peakwert, p-Wert, MNI-Koordinaten, Clustergröße
+%
+% Verwendung:
+%   - Parameter `nii_path`, `thr` und `min_ext` oben anpassen
+%   - Skript in MATLAB ausführen
+% =========================================================================
+
 
 % === Parameter einstellen ===============================================
 nii_path = 'F:\FMRIPREPRESULTFINAL\second_level\one_sample_ttest_T1\TFCE_log_pFWE_0002.nii';
@@ -19,7 +44,7 @@ Y = spm_read_vols(V);
 msk = ~isnan(Y) & Y > thr;
 idx = find(msk);
 if isempty(idx)
-    error('❌ Keine Voxel über der Schwelle (thr = %.3f).', thr);
+    error(' Keine Voxel über der Schwelle (thr = %.3f).', thr);
 end
 
 % === Clusterbildung über SPM ===========================================
@@ -89,4 +114,4 @@ disp(T);
 [pathstr, name, ~] = fileparts(nii_path);
 outcsv = fullfile(pathstr, [name '_cluster_peaks.csv']);
 writetable(T, outcsv);
-fprintf('✅ CSV gespeichert: %s\n', outcsv);
+fprintf(' CSV gespeichert: %s\n', outcsv);
