@@ -1,3 +1,37 @@
+% =========================================================================
+% Titel:    ROI-basierte TFCE-Analyse mit SPM (mehrere Kontraste & Masken)
+% Autor:    Lena Dürner
+% Datum:    2025-09-01
+%
+% Beschreibung:
+%   Dieses Skript führt für eine Liste vordefinierter ROI-Masken (.nii)
+%   eine TFCE-basierte Clusteranalyse mit SPM12 durch. Es arbeitet mit einem
+%   gegebenen `SPM.mat` aus einer Second-Level-Analyse und testet ausgewählte
+%   Kontraste innerhalb jeder ROI-Maske separat.
+%
+%   Die TFCE-Parameter wie Permutationsanzahl, Kontrastindex und
+%   Regressorhandling sind flexibel einstellbar.
+%
+% Abhängigkeiten:
+%   - MATLAB R2022b (oder neuer)
+%   - SPM12 mit TFCE-Toolbox (z. B. [spm_tfce](https://github.com/neurolabusc/SPM12/tree/master/toolbox/tfce))
+%
+% Input:
+%   - SPM.mat-Datei aus Second-Level-Analyse
+%   - ROI-NIfTI-Dateien (z. B. in MNI2009c Space)
+%
+% Output:
+%   - TFCE-Ergebnisdateien im jeweiligen Kontrastordner unter `SPM.mat`
+%     (z. B. `spmT_0001_TFCE_corrp.nii`, Clusterbilder etc.)
+%
+% Verwendung:
+%   - Pfade zu `spm_mat_path` und `roi_dir` anpassen
+%   - Kontraste über `contrast_index` setzen (z. B. [1 2])
+%   - Skript in MATLAB ausführen
+% =========================================================================
+
+
+
 % === Basispfade ========================================================
 spm_mat_path = 'F:\FMRIPREPRESULTFINAL\second_level\t1_rTMS_vs_placebo\SPM.mat';
 roi_dir = 'F:\FMRIPREPRESULTFINAL\ROIs_2_mni2009c\';
