@@ -18,7 +18,7 @@ Die Skripte sind modular aufgebaut und decken verschiedene Schritte von der Rohd
 - **Output:** fMRIPrep-Ergebnisse (`/mnt/f/FMRIPREPRESULTFINAL`)  
 - **Start:**  
   ```bash
-  bash run_fmriprep_batch.sh
+  bash run_fmriprep.sh
   ```
 
 ---
@@ -40,7 +40,7 @@ Die Skripte sind modular aufgebaut und decken verschiedene Schritte von der Rohd
 - **Output:** Textdatei `valid_blocks_log.txt`  
 - **Start:**  
   ```bash
-  python analyze_valid_blocks.py
+  python logfiles_responseanalysis.py
   ```
 
 ---
