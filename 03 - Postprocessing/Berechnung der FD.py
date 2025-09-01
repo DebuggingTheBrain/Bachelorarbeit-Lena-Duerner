@@ -22,7 +22,7 @@ for file in confound_files:
         df = pd.read_csv(file, sep='\t')
 
         if 'framewise_displacement' not in df.columns:
-            print(f"⚠️  Keine FD-Spalte in {file}")
+            print(f"  Keine FD-Spalte in {file}")
             continue
 
         fd = pd.to_numeric(df['framewise_displacement'], errors='coerce').dropna()
@@ -49,7 +49,7 @@ for file in confound_files:
         })
 
     except Exception as e:
-        print(f"❌ Fehler bei Datei {file}: {e}")
+        print(f" Fehler bei Datei {file}: {e}")
 
 # In DataFrame umwandeln
 results_df = pd.DataFrame(results)
@@ -61,4 +61,5 @@ print(results_df.to_string(index=False))
 # Als CSV speichern
 output_file = os.path.join(base_dir, "FD_QC_Summary.csv")
 results_df.to_csv(output_file, index=False)
-print(f"\n✅ Ergebnisse gespeichert in: {output_file}")
+print(f"\n Ergebnisse gespeichert in: {output_file}")
+
