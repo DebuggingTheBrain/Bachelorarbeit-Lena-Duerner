@@ -1,14 +1,3 @@
-Vor und nach dem Preprocessing sind mehrere Schritte zur Überprüfung der Datenqualität vorgenommen worden. 
-Dazu zählen 
-1. die zusätzliche Überprüfung der Datenqualität mit [MRIQC](https://mriqc.readthedocs.io/en/latest/)
-2. die ergänzende Berechnung der FD und DVARS der mit FMRIPrep preprocessed Data durch eigene Skripte
-3. das Teilen der onset Dateien in zwei verschiedene Teile
-4. das Überprüfen der Aufmerksamkeit der Probanden
-5. die Umwandlung der onset Skripte für SPM - unter Berücksichtigung der 5 entfernten Volumes
-6. die Entfernung der ersten 5 Volumes
-7. sowie das Smoothing als ergänzenden Schritt des Preprocessings
-
-
 # fMRI Preprocessing & QC Pipeline
 
 Dieses Repository enthält Skripte zur **Vorverarbeitung** und **Qualitätskontrolle (QC)** von fMRI-Daten, die mit [fMRIPrep](https://fmriprep.org/en/stable/) erstellt wurden.
@@ -23,7 +12,7 @@ Dieses Repository enthält Skripte zur **Vorverarbeitung** und **Qualitätskontr
 - **`umwandlung der onset dateien.m`** → Erstellt SPM-kompatible Onset-Files (.mat).  
 - **`smoothing.m`** → Führt räumliches Smoothing mit SPM durch.  
 
-### Qualitätskontrolle
+### Qualitätskontrolle [MRIQC](https://mriqc.readthedocs.io/en/latest/)
 - **`Berechnung der FD.py`** → Framewise Displacement (FD); FAIL bei zu starker Bewegung.  
 - **`Berechnung des DVARS.py`** → DVARS-Metriken; FAIL bei Spikes/Varianz.  
 - **`mriqc.sh`** → Startet [MRIQC](https://mriqc.readthedocs.io/) (Docker) für Einzel- & Gruppen-Reports.  
