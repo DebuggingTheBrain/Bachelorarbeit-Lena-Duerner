@@ -1,13 +1,32 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Robustes Skript zur Erstellung der Kontraste (Spider vs Bird) für FIRSTLEVELANALYSIS
-% - Sicherheitschecks (Vektorlänge vs. Design)
-% - Regressor-Namen werden geloggt
-% - Kontraste per Namen ("spider" vs "bird") statt fester Indizes (robuster ggü. Spaltenverschiebungen)
-% - Sessrep bleibt 'none' (ein SPM.mat pro Session)
+% =========================================================================
+% Titel:    Robuste Kontrasterstellung (Spider vs Bird) für SPM First-Level
+% Autor:    Lena Dürner
+% Datum:    2025-09-01
 %
-% Autorin: Lena Dürner (angepasst)
-% Letzte Änderung: 12.08.2025
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Beschreibung:
+%   Erstellt für alle Subjekte (sub-*) und Sessions (ses-*) zwei t-Kontraste
+%   im vorhandenen First-Level-Modell (`FL_All`):
+%     1) Spider_vs_Bird
+%     2) Bird_vs_Spider
+%
+% Abhängigkeiten:
+%   - MATLAB R2022b (oder neuer)
+%   - SPM12 (spm_jobman)
+%
+% Input:
+%   - baseDir/sub-*/ses-*/FL_All/SPM.mat
+%
+% Output:
+%   - baseDir/sub-*/ses-*/FL_All/
+%       * con_*.nii, spmT_*.nii (neue Kontraste)
+%       * regressor_names.txt (geloggte Regressor-Namen)
+%       * contrast_batch_spider_bird.mat (optional gespeicherter Batch)
+%
+% Verwendung:
+%   - Pfad `baseDir` prüfen/anpassen
+%   - Skript in MATLAB ausführen
+% =========================================================================
+
 
 baseDir = 'F:\FMRIPREPRESULT\';
 
@@ -164,3 +183,4 @@ end
 % ========================================================================
 % ENDE DES SKRIPTS
 % ========================================================================
+
