@@ -10,30 +10,30 @@ df_long_bat <- df %>%
     values_to = "Angst_BAT_max"
   ) %>%
   mutate(
-    # Werte für die Achsenbeschriftung umbenennen
     Zeitpunkt = recode(Zeitpunkt,
                        "Angst_BAT_max_T1" = "T1",
                        "Angst_BAT_max_T3" = "T3",
                        "Angst_BAT_max_T4" = "T4"),
-    # Reihenfolge der Zeitpunkte festlegen
     Zeitpunkt = factor(Zeitpunkt, levels = c("T1", "T3", "T4")),
     Angst_BAT_max = as.numeric(Angst_BAT_max)
   ) %>%
   drop_na(Angst_BAT_max) %>%
   mutate(
     DIPS_Farbe = case_when(
-      T2_DIPS_Criteria == 1 ~ "DIPS=1",
-      T2_DIPS_Criteria == 2 ~ "DIPS=2",
+      T2_DIPS_Criteria == 1 ~ "DIPS (phobisch)",
+      T2_DIPS_Criteria == 2 ~ "DIPS (nicht phobisch)",
       TRUE ~ "Andere/fehlend"
     ),
+    DIPS_Farbe = factor(DIPS_Farbe,
+                        levels = c("DIPS (phobisch)", "DIPS (nicht phobisch)", "Andere/fehlend")),
     ENT_Gruppe = factor(ENT_Gruppe, levels = c("Placebo-React", "rTMS_React"))
   )
 
 # Farben definieren
 farben <- c(
-  "DIPS=1" = "#F9918A",         # Rosa für DIPS=1
-  "DIPS=2" = "#34CCD0",         # Türkis für DIPS=2
-  "Andere/fehlend" = "gray60"   # Grau für sonstige
+  "DIPS (phobisch)"       = "#F9918A",   # Rosa
+  "DIPS (nicht phobisch)" = "#34CCD0",   # Türkis
+  "Andere/fehlend"        = "gray60"     # Grau
 )
 
 # Anzahl der individuellen Linien (IDs)
@@ -44,12 +44,13 @@ plot_bat <- ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID
   geom_line(aes(color = DIPS_Farbe, alpha = ENT_Gruppe), linewidth = 1) +
   scale_color_manual(
     values = farben,
-    labels = c("DIPS = 1", "DIPS = 2", "Andere/fehlend")
+    breaks = levels(df_long_bat$DIPS_Farbe),
+    labels = c("DIPS (phobisch)", "DIPS (nicht phobisch)", "Andere/fehlend")
   ) +
   scale_alpha_manual(
     values = c(
-      "Placebo-React" = 0.2,   # Sehr hell
-      "rTMS_React" = 0.9       # Nahezu voll sichtbar
+      "Placebo-React" = 0.2,
+      "rTMS_React" = 0.9
     ),
     labels = c("Placebo (hell)", "rTMS (intensiv)")
   ) +
