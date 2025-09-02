@@ -49,7 +49,7 @@ plot_bat <- ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID
   scale_y_continuous(limits = c(0, 100)) +
   theme_minimal() +
   labs(
-    title = paste0("Spaghetti-Plot für Angst_BAT_max (T1 & T4) – N = ", n_ids),
+    title = paste0("maximale Angst - BAT (T1 & T4) – N = ", n_ids),
     x = "Zeitpunkt",
     y = "Angst BAT Maximalwert",
     color = "T2 DIPS Gruppe",
