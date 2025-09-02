@@ -10,6 +10,13 @@ df_long_bat <- df %>%
     values_to = "Angst_BAT_max"
   ) %>%
   mutate(
+    # Werte für die Achsenbeschriftung umbenennen
+    Zeitpunkt = recode(Zeitpunkt,
+                       "Angst_BAT_max_T1" = "T1",
+                       "Angst_BAT_max_T3" = "T3",
+                       "Angst_BAT_max_T4" = "T4"),
+    # Reihenfolge der Zeitpunkte festlegen
+    Zeitpunkt = factor(Zeitpunkt, levels = c("T1", "T3", "T4")),
     Angst_BAT_max = as.numeric(Angst_BAT_max)
   ) %>%
   drop_na(Angst_BAT_max) %>%
@@ -49,7 +56,7 @@ plot_bat <- ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID
   scale_y_continuous(limits = c(0, 100)) +
   theme_minimal() +
   labs(
-    title = paste0("maximale Angst - BAT über drei Zeitpunkte – N = ", n_ids),
+    title = paste0("maximale Angst im BAT über drei Zeitpunkte – N = ", n_ids),
     x = "Zeitpunkt",
     y = "Angst BAT Maximalwert",
     color = "T2 DIPS Gruppe",
