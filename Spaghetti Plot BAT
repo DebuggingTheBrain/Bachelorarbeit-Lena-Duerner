@@ -1,0 +1,57 @@
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Daten vorbereiten
+df_long_bat <- df %>%
+  pivot_longer(
+    cols = c(Angst_BAT_max_T1, Angst_BAT_max_T4),  # T3 entfernt
+    names_to = "Zeitpunkt",
+    values_to = "Angst_BAT_max"
+  ) %>%
+  mutate(
+    Angst_BAT_max = as.numeric(Angst_BAT_max)
+  ) %>%
+  drop_na(Angst_BAT_max) %>%
+  mutate(
+    DIPS_Farbe = case_when(
+      T2_DIPS_Criteria == 1 ~ "DIPS=1",
+      T2_DIPS_Criteria == 2 ~ "DIPS=2",
+      TRUE ~ "Andere/fehlend"
+    ),
+    ENT_Gruppe = factor(ENT_Gruppe, levels = c("Placebo-React", "rTMS_React"))
+  )
+
+# Farben definieren
+farben <- c(
+  "DIPS=1" = "#F9918A",
+  "DIPS=2" = "#34CCD0",
+  "Andere/fehlend" = "gray60"
+)
+
+# Anzahl individueller Linien (IDs) zählen
+n_ids <- df_long_bat %>% pull(ID) %>% unique() %>% length()
+
+# Plot
+ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID)) +
+  geom_line(aes(color = DIPS_Farbe, alpha = ENT_Gruppe), linewidth = 1) +
+  scale_color_manual(
+    values = farben,
+    labels = c("DIPS = 1", "DIPS = 2", "Andere/fehlend")
+  ) +
+  scale_alpha_manual(
+    values = c(
+      "Placebo-React" = 0.2,
+      "rTMS_React" = 0.9
+    ),
+    labels = c("Placebo (hell)", "rTMS (intensiv)")
+  ) +
+  scale_y_continuous(limits = c(0, 100)) +
+  theme_minimal() +
+  labs(
+    title = paste0("Spaghetti-Plot für Angst_BAT_max (T1 & T4) – N = ", n_ids),
+    x = "Zeitpunkt",
+    y = "Angst BAT Maximalwert",
+    color = "T2 DIPS Gruppe",
+    alpha = "Behandlungsgruppe"
+  )
