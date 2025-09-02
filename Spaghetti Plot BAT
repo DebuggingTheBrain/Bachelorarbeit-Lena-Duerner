@@ -10,6 +10,12 @@ df_long_bat <- df %>%
     values_to = "Angst_BAT_max"
   ) %>%
   mutate(
+    # Werte der Achse umbenennen
+    Zeitpunkt = recode(Zeitpunkt,
+                       "Angst_BAT_max_T1" = "T1",
+                       "Angst_BAT_max_T4" = "T4"),
+    # Reihenfolge der Zeitpunkte festlegen
+    Zeitpunkt = factor(Zeitpunkt, levels = c("T1", "T4")),
     Angst_BAT_max = as.numeric(Angst_BAT_max)
   ) %>%
   drop_na(Angst_BAT_max) %>%
