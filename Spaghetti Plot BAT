@@ -24,16 +24,16 @@ df_long_bat <- df %>%
 
 # Farben definieren
 farben <- c(
-  "DIPS=1" = "#F9918A",
-  "DIPS=2" = "#34CCD0",
-  "Andere/fehlend" = "gray60"
+  "DIPS=1" = "#F9918A",         # Rosa
+  "DIPS=2" = "#34CCD0",         # Türkis
+  "Andere/fehlend" = "gray60"   # Grau
 )
 
-# Anzahl individueller Linien (IDs) zählen
+# Anzahl der eindeutigen Personen (IDs)
 n_ids <- df_long_bat %>% pull(ID) %>% unique() %>% length()
 
-# Plot
-ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID)) +
+# Plot erzeugen
+plot_bat <- ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID)) +
   geom_line(aes(color = DIPS_Farbe, alpha = ENT_Gruppe), linewidth = 1) +
   scale_color_manual(
     values = farben,
@@ -41,8 +41,8 @@ ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID)) +
   ) +
   scale_alpha_manual(
     values = c(
-      "Placebo-React" = 0.2,
-      "rTMS_React" = 0.9
+      "Placebo-React" = 0.2,   # deutlich heller
+      "rTMS_React" = 0.9       # fast deckend
     ),
     labels = c("Placebo (hell)", "rTMS (intensiv)")
   ) +
@@ -55,3 +55,16 @@ ggplot(df_long_bat, aes(x = Zeitpunkt, y = Angst_BAT_max, group = ID)) +
     color = "T2 DIPS Gruppe",
     alpha = "Behandlungsgruppe"
   )
+
+# Plot anzeigen
+print(plot_bat)
+
+# Plot speichern mit sehr hoher Auflösung
+ggsave(
+  filename = "SpaghettiPlot_Angst_BAT_max_T1_T4.png",
+  plot = plot_bat,
+  width = 11.7,    # ca. DIN A4 quer in Inch
+  height = 8.3,
+  dpi = 600,
+  units = "in"
+)
