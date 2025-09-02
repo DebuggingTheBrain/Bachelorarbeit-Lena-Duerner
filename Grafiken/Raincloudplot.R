@@ -8,17 +8,17 @@ library(tidyr)
 # Daten vorbereiten
 plot_data <- df %>%
   filter(
-    !is.na(T1_SPQ_Sum_1s),
-    !is.na(T4_SPQ_Sum_1s),
+    !is.na(T1_SPQ_Sum),
+    !is.na(T4_SPQ_Sum),
     ENT_Gruppe %in% c("rTMS-React", "Placebo-React")
   ) %>%
   mutate(
-    T1_SPQ_Sum = as.numeric(T1_SPQ_Sum_1s),
-    T4_SPQ_Sum = as.numeric(T4_SPQ_Sum_1s),
+    T1_SPQ_Sum = as.numeric(T1_SPQ_Sum),
+    T4_SPQ_Sum = as.numeric(T4_SPQ_Sum),
     ENT_Gruppe = factor(ENT_Gruppe, levels = c("rTMS-React", "Placebo-React"))
   ) %>%
   pivot_longer(
-    cols = c(T1_SPQ_Sum_1s, T4_SPQ_Sum_1s),
+    cols = c(T1_SPQ_Sum_1s, T4_SPQ_Sum),
     names_to = "Zeitpunkt",
     values_to = "SPQ_Sum"
   ) %>%
