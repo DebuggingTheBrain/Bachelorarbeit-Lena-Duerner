@@ -1,0 +1,77 @@
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Daten vorbereiten
+df_long_spq <- df %>%
+  pivot_longer(
+    cols = c(T1_SPQ_Sum_1s, T4_SPQ_Sum_1s),  # neue Variablen
+    names_to = "Zeitpunkt",
+    values_to = "SPQ_Sum"
+  ) %>%
+  mutate(
+    # Werte der Achse umbenennen
+    Zeitpunkt = recode(Zeitpunkt,
+                       "T1_SPQ_Sum_1s" = "T1",
+                       "T4_SPQ_Sum_1s" = "T4"),
+    # Reihenfolge der Zeitpunkte festlegen
+    Zeitpunkt = factor(Zeitpunkt, levels = c("T1", "T4")),
+    SPQ_Sum = as.numeric(SPQ_Sum)
+  ) %>%
+  drop_na(SPQ_Sum) %>%
+  mutate(
+    DIPS_Farbe = case_when(
+      T2_DIPS_Criteria == 1 ~ "DIPS= phobisch",
+      T2_DIPS_Criteria == 2 ~ "DIPS= nicht phobisch",
+      TRUE ~ "Andere/fehlend"
+    ),
+    ENT_Gruppe = factor(ENT_Gruppe, levels = c("Placebo-React", "rTMS_React"))
+  )
+
+# Farben definieren
+farben <- c(
+  "DIPS=1" = "#F9918A",         # Rosa
+  "DIPS=2" = "#34CCD0",         # Türkis
+  "Andere/fehlend" = "gray60"   # Grau
+)
+
+# Anzahl der eindeutigen Personen (IDs)
+n_ids <- df_long_spq %>% pull(ID) %>% unique() %>% length()
+
+# Plot erzeugen
+plot_spq <- ggplot(df_long_spq, aes(x = Zeitpunkt, y = SPQ_Sum, group = ID)) +
+  geom_line(aes(color = DIPS_Farbe, alpha = ENT_Gruppe), linewidth = 1) +
+  scale_color_manual(
+    values = farben,
+    labels = c("DIPS = 1", "DIPS = 2", "Andere/fehlend")
+  ) +
+  scale_alpha_manual(
+    values = c(
+      "Placebo-React" = 0.2,   # deutlich heller
+      "rTMS_React" = 0.9       # fast deckend
+    ),
+    labels = c("Placebo (hell)", "rTMS (intensiv)")
+  ) +
+  # Skala fix auf 0–35
+  scale_y_continuous(limits = c(0, 35)) +
+  theme_minimal() +
+  labs(
+    title = paste0("SPQ Summe (T1 & T4) – N = ", n_ids),
+    x = "Zeitpunkt",
+    y = "SPQ Summenwert",
+    color = "T2 DIPS Gruppe",
+    alpha = "Behandlungsgruppe"
+  )
+
+# Plot anzeigen
+print(plot_spq)
+
+# Plot speichern mit sehr hoher Auflösung
+ggsave(
+  filename = "SpaghettiPlot_SPQ_Sum_1s_T1_T4.png",
+  plot = plot_spq,
+  width = 11.7,    # ca. DIN A4 quer in Inch
+  height = 8.3,
+  dpi = 600,
+  units = "in"
+)
