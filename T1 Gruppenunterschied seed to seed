@@ -1,0 +1,188 @@
+% =========================================================================
+% Seed-to-Seed Permutationstest mit Max-T-Korrektur (robuste Version)
+% =========================================================================
+
+% === Einstellungen ===
+dataDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
+roiDir  = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
+nPerm   = 5000;
+
+% === Kontrastdateien laden ===
+files = dir(fullfile(dataDir, '*Contrast_0005*spiderbird*.mat'));
+nSub = numel(files);
+fprintf('Gefundene Kontrastdateien: %d\n', nSub);
+
+% === ROIs laden (alle außer "Group_mask") ===
+allROIsStruct = dir(fullfile(roiDir, '*_masked.nii'));
+allROINames = {allROIsStruct.name};
+allROINames = setdiff(allROINames, {'Group_mask.nii'});
+selectedROIs = sort(allROINames);
+roiLabelsFull = regexprep(selectedROIs, '_in_MNI2009c_masked\.nii$', '');
+
+fprintf('📌 Verwendete ROIs (%d):\n', numel(selectedROIs));
+disp(roiLabelsFull');
+
+[found, idxSelected] = ismember(selectedROIs, allROINames);
+if any(~found)
+    error('Ein oder mehrere ausgewählte ROIs fehlen:\n%s', strjoin(selectedROIs(~found), '\n'));
+end
+
+% === Initialisierungen ===
+nSeeds = length(selectedROIs);
+roiLabels1 = roiLabelsFull;
+roiLabels2 = roiLabelsFull;
+
+% === Beispiel laden für Feldnamen ===
+example = load(fullfile(dataDir, files(1).name));
+fn = fieldnames(example);
+
+% === Daten einlesen ===
+allData = zeros(nSeeds, nSeeds, nSub);
+for i = 1:nSub
+    d = load(fullfile(dataDir, files(i).name));
+    matrix = d.(fn{1});
+    allData(:, :, i) = matrix(idxSelected, idxSelected);
+end
+
+% =========================================================================
+% === Beobachtete t-Werte berechnen (robust)
+% =========================================================================
+tObs = NaN(nSeeds, nSeeds);
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        x = squeeze(allData(i,j,:));
+        if numel(x) > 1 && all(~isnan(x)) && std(x) > 0
+            [~,~,~,stats] = ttest(x);
+            tObs(i,j) = stats.tstat;
+        end
+    end
+end
+
+% =========================================================================
+% === Permutationstest mit Max-T-Korrektur
+% =========================================================================
+maxTvals = zeros(nPerm,1);
+tPermCube = NaN(nSeeds, nSeeds, nPerm);
+fprintf('⏳ Starte %d Permutationen...\n', nPerm);
+
+for p = 1:nPerm
+    signs = (randi([0 1], nSub, 1) * 2 - 1);
+    permData = allData;
+    for s = 1:nSub
+        permData(:,:,s) = permData(:,:,s) * signs(s);
+    end
+
+    tMatPerm = NaN(nSeeds, nSeeds);
+    for i = 1:nSeeds
+        for j = 1:nSeeds
+            x = squeeze(permData(i,j,:));
+            if numel(x) > 1 && all(~isnan(x)) && std(x) > 0
+                [~,~,~,stats] = ttest(x);
+                tMatPerm(i,j) = stats.tstat;
+            end
+        end
+    end
+
+    tPermCube(:,:,p) = tMatPerm;
+    maxTvals(p) = max(abs(tMatPerm(:)), [], 'omitnan');
+end
+
+fprintf('✅ Permutationen abgeschlossen.\n');
+
+% =========================================================================
+% === Empirische p-Werte & Signifikanzmatrix (Max-T)
+% =========================================================================
+pMatPerm = NaN(nSeeds, nSeeds);
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        t = tObs(i,j);
+        if ~isnan(t)
+            pMatPerm(i,j) = mean(abs(tPermCube(i,j,:)) >= abs(t), 'omitnan');
+        end
+    end
+end
+
+tThreshold = prctile(maxTvals, 95);
+significant = abs(tObs) >= tThreshold;
+
+fprintf('🎯 Schwelle für FWER 0.05 (Max-T): %.3f\n', tThreshold);
+fprintf('🔎 Anzahl signifikanter Verbindungen (Max-T): %d\n', sum(significant(:), 'omitnan'));
+
+% =========================================================================
+% === FDR-Korrektur (Benjamini-Hochberg)
+% =========================================================================
+pValsVector = pMatPerm(:);
+pFDR = mafdr(pValsVector, 'BHFDR', true);
+pFDRMatrix = reshape(pFDR, size(pMatPerm));
+significantFDR = pFDRMatrix < 0.05;
+
+fprintf('🧪 Anzahl signifikanter Verbindungen (FDR < 0.05): %d\n', sum(significantFDR(:), 'omitnan'));
+
+% =========================================================================
+% === Visualisierungen
+% =========================================================================
+figure;
+imagesc(tObs); title('Beobachtete t-Werte'); colorbar;
+xlabel('Ziel-ROI'); ylabel('Quell-ROI');
+set(gca, 'XTick', 1:nSeeds, 'XTickLabel', roiLabels2, 'XTickLabelRotation', 45);
+set(gca, 'YTick', 1:nSeeds, 'YTickLabel', roiLabels1);
+
+figure;
+imagesc(significant); title('Signifikante Verbindungen (Max-T)'); colorbar;
+xlabel('Ziel-ROI'); ylabel('Quell-ROI');
+set(gca, 'XTick', 1:nSeeds, 'XTickLabel', roiLabels2, 'XTickLabelRotation', 45);
+set(gca, 'YTick', 1:nSeeds, 'YTickLabel', roiLabels1);
+
+figure;
+imagesc(significantFDR); title('Signifikante Verbindungen (FDR)'); colorbar;
+xlabel('Ziel-ROI'); ylabel('Quell-ROI');
+set(gca, 'XTick', 1:nSeeds, 'XTickLabel', roiLabels2, 'XTickLabelRotation', 45);
+set(gca, 'YTick', 1:nSeeds, 'YTickLabel', roiLabels1);
+
+figure;
+imagesc(pMatPerm < 0.05); title('Unkorrigiert signifikant (p < 0.05)'); colorbar;
+xlabel('Ziel-ROI'); ylabel('Quell-ROI');
+set(gca, 'XTick', 1:nSeeds, 'XTickLabel', roiLabels2, 'XTickLabelRotation', 45);
+set(gca, 'YTick', 1:nSeeds, 'YTickLabel', roiLabels1);
+
+% =========================================================================
+% === Tabellenerstellung & Export
+% =========================================================================
+rows = []; cols = []; ts = []; ps = []; sigs = []; sigsFDR = []; pFDRs = [];
+for i = 1:nSeeds
+    for j = 1:nSeeds
+        rows(end+1) = i;
+        cols(end+1) = j;
+        ts(end+1) = tObs(i,j);
+        ps(end+1) = pMatPerm(i,j);
+        sigs(end+1) = significant(i,j);
+        pFDRs(end+1) = pFDRMatrix(i,j);
+        sigsFDR(end+1) = significantFDR(i,j);
+    end
+end
+
+ROI_From = roiLabels1(rows);
+ROI_To   = roiLabels2(cols);
+
+resultsTable = table( ...
+    ROI_From(:), ROI_To(:), ts(:), ps(:), sigs(:), pFDRs(:), sigsFDR(:), ...
+    'VariableNames', {'From', 'To', 't_Value', 'p_Empirical', 'Significant_MaxT', 'p_FDR', 'Significant_FDR'});
+
+% Speichern mit angepasstes Namensschema
+baseName = 'T1Gruppenunterschied_SeedToSeed_PermutationTest';
+
+writetable(resultsTable, [baseName '_korrigiert_FDR.csv']);
+fprintf('\n✅ Gesamttabelle gespeichert: %s_korrigiert_FDR.csv\n', baseName);
+
+writetable(resultsTable(resultsTable.Significant_MaxT == 1, :), ...
+    [baseName '_korrigiert_Signifikant_MaxT.csv']);
+writetable(resultsTable(resultsTable.Significant_FDR == 1, :), ...
+    [baseName '_korrigiert_Signifikant_FDR.csv']);
+
+fprintf('✅ Signifikante Verbindungen (Max-T): %s_korrigiert_Signifikant_MaxT.csv\n', baseName);
+fprintf('✅ Signifikante Verbindungen (FDR): %s_korrigiert_Signifikant_FDR.csv\n', baseName);
+
+% === Unkorrigiert signifikant (p < 0.05) ===
+sig_uncorrected = resultsTable(resultsTable.p_Empirical < 0.05, :);
+writetable(sig_uncorrected, [baseName '_unkorrigiert_signifikant_p005.csv']);
+fprintf('📁 Unkorrigiert signifikant (p < 0.05): %s_unkorrigiert_signifikant_p005.csv\n', baseName);
