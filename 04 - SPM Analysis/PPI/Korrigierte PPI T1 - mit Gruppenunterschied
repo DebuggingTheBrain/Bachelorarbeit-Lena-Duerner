@@ -1,15 +1,14 @@
 % =========================================================================
 % Seed-to-Seed 2nd-Level Analyse (asymmetrisch, spiderbird-Kontrast)
-% Mit ROI-Namen aus Masken, Visualisierung, Tabellenexport + FDR-Korrektur
-% Autorin: Lena Dürner 
-% letzte Veränderung: 27.08.2025 
+% Gruppenvergleich: rTMS-React vs. Placebo-React
+% Visualisierung: Heatmaps mit FDR- und p<.05-Umrandung
 % =========================================================================
 
-% === zu Grunde liegende Pfade des Skriptes - hier anpassen oder ersetzen ===
+% === Pfade anpassen ===
 dataDir = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\gPPI\ROI_to_ROI\asymmetrical';
 roiDir  = 'F:\FMRIPREPRESULTFINAL\TMFC_T1\ROI_sets\angst\Masked_ROIs';
 
-% === Definition der Kontrastdateien - Aufsuchen ===========================
+% === Kontrastdateien finden ===
 files = dir(fullfile(dataDir, '*Contrast_0005*spiderbird*.mat'));
 nSub = numel(files);
 fprintf('Gefundene Kontrastdateien: %d\n', nSub);
@@ -18,7 +17,7 @@ if nSub == 0
     error('Keine passenden Kontrastdateien gefunden.');
 end
 
-% === Beispiel-Datei laden =================================================
+% === Beispiel-Datei laden ===
 example = load(fullfile(dataDir, files(1).name));
 fn = fieldnames(example);
 matrix = example.(fn{1});
@@ -28,128 +27,163 @@ if nSeeds1 ~= nSeeds2
     warning('Matrix ist nicht quadratisch (%d x %d)', nSeeds1, nSeeds2);
 end
 
-% === ROI-Namen aus NIfTI-Dateien extrahieren (auch Unterverzeichnisse) ===
+% === ROI-Dateien laden und bereinigen ===
 roiFilesStruct = [ ...
     dir(fullfile(roiDir, '**', '*_masked.nii')); ...
     dir(fullfile(roiDir, '**', '*_masked.nii.gz'))];
 roiFileNames = sort({roiFilesStruct.name});
 
-fprintf('ROI-Verzeichnis: %s\n', roiDir);
-fprintf('Gefundene ROI-Dateien: %d\n', numel(roiFileNames));
-
 roiLabels = cell(numel(roiFileNames), 1);
 for i = 1:numel(roiFileNames)
     fname = roiFileNames{i};
     fname = regexprep(fname, '\.nii(\.gz)?$', '');
-    roiLabels{i} = regexprep(fname, '_masked$', '');
+    fname = regexprep(fname, '_masked$', '');
+    fname = regexprep(fname, '_in_MNI2009c$', '');
+    roiLabels{i} = fname;
 end
 
-% === Alle gefundenen ROI-Namen anzeigen ===
-disp('Verfügbare ROI-Labels:');
-disp(roiLabels');
-
-% === Alle verfügbaren ROIs verwenden ===
-selectedIdx = 1:numel(roiLabels);
-fprintf('\n Alle %d verfügbaren ROIs werden verwendet:\n', numel(selectedIdx));
+fprintf('\nAlle %d verfügbaren ROIs werden verwendet:\n', numel(roiLabels));
 disp(roiLabels);
 
-roiLabels = roiLabels(selectedIdx);
+% === Gruppenzuordnung (Subject_#### → Gruppe) ============================
+groupTable = {
+    'Subject_0001', 'rTMS-React';
+    'Subject_0002', 'Placebo-React';
+    'Subject_0003', 'rTMS-React';
+    'Subject_0004', 'Placebo-React';
+    'Subject_0005', 'Placebo-React';
+    'Subject_0006', 'rTMS-React';
+    'Subject_0007', 'rTMS-React';
+    'Subject_0008', 'Placebo-React';
+    'Subject_0009', 'Placebo-React';
+    'Subject_0010', 'rTMS-React';
+    'Subject_0011', 'rTMS-React';
+    'Subject_0012', 'Placebo-React';
+    'Subject_0013', 'rTMS-React';
+    'Subject_0014', 'Placebo-React';
+    'Subject_0015', 'Placebo-React';
+    'Subject_0016', 'rTMS-React';
+    'Subject_0017', 'rTMS-React';
+    'Subject_0018', 'Placebo-React';
+    'Subject_0019', 'rTMS-React';
+    'Subject_0020', 'Placebo-React';
+    'Subject_0021', 'Placebo-React';
+    'Subject_0022', 'rTMS-React';
+};
 
-% === Alle Matrizen einlesen und filtern ===
-allData = zeros(numel(selectedIdx), numel(selectedIdx), nSub);
+subjectNames = cell(nSub,1);
+groupLabels  = cell(nSub,1);
+
+for i = 1:nSub
+    [~, fname] = fileparts(files(i).name);
+    match = regexp(fname, '(Subject_\d+)', 'tokens', 'once');
+    if isempty(match)
+        error('Kann Subject-Code in Dateiname "%s" nicht extrahieren.', fname);
+    end
+    subjectNames{i} = match{1};
+    idx = find(strcmp(groupTable(:,1), match{1}));
+    if isempty(idx)
+        error('Subject %s ist keiner Gruppe zugewiesen.', match{1});
+    end
+    groupLabels{i} = groupTable{idx,2};
+end
+
+groupLabels = string(groupLabels);
+grp1_idx = strcmp(groupLabels, 'Placebo-React');
+grp2_idx = strcmp(groupLabels, 'rTMS-React');
+fprintf('Placebo-React: %d Probanden, rTMS-React: %d Probanden\n', sum(grp1_idx), sum(grp2_idx));
+
+% === Matrizen laden ===
+nROIs = numel(roiLabels);
+allData = zeros(nROIs, nROIs, nSub);
 for i = 1:nSub
     d = load(fullfile(dataDir, files(i).name));
     matrix = d.(fn{1});
-    allData(:, :, i) = matrix(selectedIdx, selectedIdx);
+    allData(:, :, i) = matrix(1:nROIs, 1:nROIs);
 end
 
-nSeeds1 = numel(selectedIdx);
-nSeeds2 = nSeeds1;
+% === Gruppenmittelwerte berechnen ===
+meanGrpPlacebo = mean(allData(:, :, grp1_idx), 3);
+meanGrpRTMS    = mean(allData(:, :, grp2_idx), 3);
 
-% === Mittelwertmatrix berechnen ===
-meanMat = mean(allData, 3);
-
-% === T-Tests durchführen ===
-tMat = NaN(nSeeds1, nSeeds2);
-pMat = NaN(nSeeds1, nSeeds2);
-for i = 1:nSeeds1
-    for j = 1:nSeeds2
-        if i == j
-            continue;
-        end
-        x = squeeze(allData(i, j, :));
-        [~, p, ~, stats] = ttest(x);
+% === 2-Stichproben-t-Test (rTMS vs. Placebo) ===
+tMat = NaN(nROIs, nROIs);
+pMat = NaN(nROIs, nROIs);
+for i = 1:nROIs
+    for j = 1:nROIs
+        if i == j, continue; end
+        x1 = squeeze(allData(i, j, grp2_idx)); % rTMS
+        x2 = squeeze(allData(i, j, grp1_idx)); % Placebo
+        [~, p, ~, stats] = ttest2(x1, x2);
         tMat(i, j) = stats.tstat;
         pMat(i, j) = p;
     end
 end
 
-% === FDR-Korrektur (Benjamini-Hochberg) ===
-fprintf('\n  FDR-Korrektur (Benjamini-Hochberg)...\n');
-mask_offdiag = true(nSeeds1, nSeeds2);
-mask_offdiag(1:nSeeds1+1:end) = false;
+% === FDR-Korrektur ===
+fprintf('\nFDR-Korrektur (Benjamini-Hochberg)...\n');
+mask_offdiag = true(nROIs, nROIs);
+mask_offdiag(1:nROIs+1:end) = false;
 vec_p = pMat(mask_offdiag);
-
-if isempty(vec_p) || all(isnan(vec_p))
-    error(' Keine gültigen p-Werte vorhanden für die FDR-Korrektur.');
-end
-
 fdr_vec_p = mafdr(vec_p, 'BHFDR', true);
 pMat_FDR = NaN(size(pMat));
 pMat_FDR(mask_offdiag) = fdr_vec_p;
 sig_FDR_Mat = pMat_FDR < 0.05;
-fprintf(' Signifikante Verbindungen nach FDR: %d\n', nansum(sig_FDR_Mat(:)));
+fprintf('Signifikante Verbindungen nach FDR: %d\n', nansum(sig_FDR_Mat(:)));
 
-% === Visualisierung ===
-figure; imagesc(meanMat);
-title('Mittelwert der PPI-Verbindungen (asymmetrisch)');
-xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
-set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
-set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+% === Visualisierung: Heatmaps ============================================
 
-figure; imagesc(tMat);
-title('t-Werte'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
-set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
-set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+% Heatmap: t-Werte mit Umrandung
+figure;
+imagesc(tMat);
+title('t-Werte mit Signifikanz-Umrandungen (rTMS - Placebo)');
+colorbar;
+xlabel('Ziel-ROI'); ylabel('Quell-ROI'); axis square;
+set(gca, 'XTick', 1:nROIs, 'XTickLabel', roiLabels, 'XTickLabelRotation', 45);
+set(gca, 'YTick', 1:nROIs, 'YTickLabel', roiLabels);
+hold on;
 
-figure; imagesc(pMat < 0.05);
-title('Signifikant (p < 0.05)'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
-set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
-set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+% Rote Umrandung: FDR-signifikant
+[rowFDR, colFDR] = find(sig_FDR_Mat);
+for k = 1:length(rowFDR)
+    rectangle('Position', [colFDR(k)-0.5, rowFDR(k)-0.5, 1, 1], ...
+              'EdgeColor', 'red', 'LineWidth', 1.5);
+end
 
-significantMean = meanMat;
-significantMean(pMat >= 0.05) = NaN;
-figure; imagesc(significantMean);
-title('Mittelwerte p < 0.05'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
-set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
-set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+% Schwarze Umrandung: unkorrekt signifikant, aber nicht FDR
+[rowUnc, colUnc] = find((pMat < 0.05) & ~sig_FDR_Mat);
+for k = 1:length(rowUnc)
+    rectangle('Position', [colUnc(k)-0.5, rowUnc(k)-0.5, 1, 1], ...
+              'EdgeColor', 'black', 'LineWidth', 1.5);
+end
 
-figure; imagesc(sig_FDR_Mat);
-title('Signifikant nach FDR'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
-set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
-set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+% Heatmap: Mittelwertsdifferenz (rTMS - Placebo), FDR-maskiert
+diffMean = meanGrpRTMS - meanGrpPlacebo;
+diffMean(~sig_FDR_Mat) = NaN;
 
-significantMeanFDR = meanMat;
-significantMeanFDR(~sig_FDR_Mat) = NaN;
-figure; imagesc(significantMeanFDR);
-title('Mittelwerte FDR-signifikant'); xlabel('Ziel-ROI'); ylabel('Quell-ROI'); colorbar; axis square;
-set(gca, 'XTick', 1:nSeeds2, 'XTickLabel', roiLabels, 'XTickLabelRotation', 90);
-set(gca, 'YTick', 1:nSeeds1, 'YTickLabel', roiLabels);
+figure;
+imagesc(diffMean);
+title('Mittelwertsdifferenz (rTMS - Placebo, FDR-signifikant)');
+colorbar;
+xlabel('Ziel-ROI'); ylabel('Quell-ROI'); axis square;
+set(gca, 'XTick', 1:nROIs, 'XTickLabel', roiLabels, 'XTickLabelRotation', 45);
+set(gca, 'YTick', 1:nROIs, 'YTickLabel', roiLabels);
 
-% === Tabelle mit Verbindungen ===
-rows = []; cols = []; means = []; ts = []; ps = []; qvals = []; signif = []; signifFDR = [];
+% === Ergebnistabelle erstellen und speichern =============================
+rows = []; cols = []; rtms_means = []; plac_means = []; ts = []; ps = []; qvals = []; signif = []; signifFDR = [];
 
-for i = 1:nSeeds1
-    for j = 1:nSeeds2
+for i = 1:nROIs
+    for j = 1:nROIs
         if i == j, continue; end
-        rows(end+1)    = i;
-        cols(end+1)    = j;
-        means(end+1)   = meanMat(i, j);
-        ts(end+1)      = tMat(i, j);
-        ps(end+1)      = pMat(i, j);
-        qvals(end+1)   = pMat_FDR(i, j);
-        signif(end+1)  = pMat(i, j) < 0.05;
-        signifFDR(end+1) = pMat_FDR(i, j) < 0.05;
+        rows(end+1) = i;
+        cols(end+1) = j;
+        rtms_means(end+1) = meanGrpRTMS(i,j);
+        plac_means(end+1) = meanGrpPlacebo(i,j);
+        ts(end+1) = tMat(i,j);
+        ps(end+1) = pMat(i,j);
+        qvals(end+1) = pMat_FDR(i,j);
+        signif(end+1) = pMat(i,j) < 0.05;
+        signifFDR(end+1) = pMat_FDR(i,j) < 0.05;
     end
 end
 
@@ -157,14 +191,16 @@ ROI_From = roiLabels(rows);
 ROI_To   = roiLabels(cols);
 
 resultsTable = table( ...
-    ROI_From(:), ROI_To(:), means(:), ts(:), ps(:), qvals(:), signif(:), signifFDR(:), ...
-    'VariableNames', {'From','To','Mean','T','p','q_FDR','Significant_p<.05','Significant_FDR'});
+    ROI_From(:), ROI_To(:), rtms_means(:), plac_means(:), ts(:), ps(:), qvals(:), signif(:), signifFDR(:), ...
+    'VariableNames', {'From','To','Mean_rTMS','Mean_Placebo','T','p','q_FDR','Significant_p<.05','Significant_FDR'});
 
 disp(resultsTable(1:min(10, height(resultsTable)), :));
+
 sortedTable = sortrows(resultsTable, 'p');
-writetable(sortedTable, 'SeedToSeed_Results_Asymmetric.csv');
-fprintf('\n Tabelle gespeichert: SeedToSeed_Results_Asymmetric.csv\n');
+writetable(sortedTable, 'SeedToSeed_GroupDifference_rTMS_vs_Placebo.csv');
+fprintf('\n📁 Tabelle gespeichert: SeedToSeed_GroupDifference_rTMS_vs_Placebo.csv\n');
 
 signifOnly = sortedTable(sortedTable.Significant_FDR == 1, :);
-writetable(signifOnly, 'SeedToSeed_SignificantOnly_FDR_Asymmetric.csv');
-fprintf(' Nur FDR-signifikante Verbindungen gespeichert: SeedToSeed_SignificantOnly_FDR_Asymmetric.csv\n');
+writetable(signifOnly, 'SeedToSeed_SignificantOnly_FDR_GroupDiff.csv');
+fprintf('📁 Nur FDR-signifikante Verbindungen gespeichert: SeedToSeed_SignificantOnly_FDR_GroupDiff.csv\n');
+
