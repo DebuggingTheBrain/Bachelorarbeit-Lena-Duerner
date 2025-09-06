@@ -1,14 +1,13 @@
-% =========================================================================
-% Thalamus Rechts - Beta-Extraktion (T4) + Gruppendifferenz + Farbplot
-% =========================================================================
 clear;
 clc;
 
-% === Pfade ===============================================================
-base_dir = 'F:\FMRIPREPRESULTFINAL';
-roi_thalamus_R = fullfile(base_dir, 'ROIs_2_mni2009c', 'Thalamus_R_in_MNI2009c.nii');
+% =============== Pfade ===================================================
+base_dir  = 'F:\FMRIPREPRESULTFINAL';
+roi_dir   = fullfile(base_dir, 'ROIs_2_mni2009cKopie');
+plot_dir  = fullfile(base_dir, 'ROI_Plots_T4');
+if ~exist(plot_dir, 'dir'), mkdir(plot_dir); end
 
-% === Manuelle Gruppenzuordnung ===========================================
+% =============== Gruppenzuordnung ========================================
 group_map = containers.Map( ...
     {'sub-SM2VP007','sub-SM2VP010','sub-SM2VP011','sub-SM2VP012','sub-SM2VP017','sub-SM2VP023', ...
      'sub-SM2VP025','sub-SM2VP033','sub-SM2VP034','sub-SM2VP035','sub-SM2VP039','sub-SM2VP040', ...
@@ -20,138 +19,145 @@ group_map = containers.Map( ...
      'rTMS','Placebo','Placebo','rTMS'} ...
 );
 
-% === Initialisierung =====================================================
 subs = dir(fullfile(base_dir, 'sub-*'));
 subs = subs([subs.isdir]);
 
-all_betas_thalamus_R = [];
-sub_ids = {};
-group_labels = {};
+% =============== Alle ROIs laden =========================================
+roi_files = dir(fullfile(roi_dir, '*_in_MNI2009c.nii'));
+all_results = [];
 
-% === Loop über Subjekte ==================================================
-for i = 1:numel(subs)
-    sub = subs(i).name;
-    spm_path = fullfile(base_dir, sub, 'ses-T4', 'FL_blöcke', 'SPM.mat');
+for r = 1:numel(roi_files)
+    roi_file = fullfile(roi_dir, roi_files(r).name);
+    roi_name = erase(roi_files(r).name, '_in_MNI2009c.nii');
 
-    if ~exist(spm_path, 'file')
-        warning('SPM.mat fehlt: %s', spm_path); continue;
-    end
+    fprintf('\n=== ROI: %s ===\n', roi_name);
 
-    if ~isKey(group_map, sub)
-        warning('Keine Gruppenzuordnung für %s – wird übersprungen.', sub);
-        continue;
-    end
+    all_betas = [];
+    sub_ids = {};
+    group_labels = {};
 
-    try
-        load(spm_path);
-        names = SPM.xX.name;
+    for i = 1:numel(subs)
+        sub = subs(i).name;
+        spm_path = fullfile(base_dir, sub, 'ses-T4', 'FL_blöcke', 'SPM.mat');
 
-        idx_bird = find(contains(names, 'bird'));
-        idx_spider = find(contains(names, 'spider'));
+        if ~exist(spm_path, 'file')
+            warning('SPM.mat fehlt: %s', spm_path); continue;
+        end
 
-        if numel(idx_bird) ~= 4 || numel(idx_spider) ~= 4
-            warning('Nicht exakt 4 bird/spider Betas bei %s – wird übersprungen.', sub);
+        if ~isKey(group_map, sub)
+            warning('Keine Gruppenzuordnung für %s – übersprungen.', sub);
             continue;
         end
 
-        betas = cellstr(spm_select('FPList', fileparts(spm_path), '^beta_.*\.nii$'));
+        try
+            load(spm_path);
+            names = SPM.xX.name;
+            idx_bird = find(contains(names, 'bird'));
+            idx_spider = find(contains(names, 'spider'));
 
-        for b = 1:4
-            beta_thalamus_bird(b)   = spm_summarise(betas{idx_bird(b)}, roi_thalamus_R, @mean);
-            beta_thalamus_spider(b) = spm_summarise(betas{idx_spider(b)}, roi_thalamus_R, @mean);
+            if numel(idx_bird) ~= 4 || numel(idx_spider) ~= 4
+                warning('Nicht exakt 4 bird/spider Betas bei %s', sub); continue;
+            end
+
+            betas = cellstr(spm_select('FPList', fileparts(spm_path), '^beta_.*\.nii$'));
+
+            for b = 1:4
+                beta_bird(b)   = spm_summarise(betas{idx_bird(b)}, roi_file, @mean);
+                beta_spider(b) = spm_summarise(betas{idx_spider(b)}, roi_file, @mean);
+            end
+
+            all_betas(end+1,:) = [beta_bird beta_spider];
+            sub_ids{end+1} = sub;
+            group_labels{end+1} = group_map(sub);
+
+        catch ME
+            warning('Fehler bei %s: %s', sub, ME.message);
         end
-
-        all_betas_thalamus_R(end+1,:) = [beta_thalamus_bird beta_thalamus_spider];
-        sub_ids{end+1} = sub;
-        group_labels{end+1} = group_map(sub);
-
-    catch ME
-        warning('Fehler bei %s: %s', sub, ME.message);
     end
+
+    % =============== Datenbereinigung ===================================
+    if isempty(all_betas)
+        continue;
+    end
+
+    all_betas = double(all_betas);
+    valid_idx = all(~isnan(all_betas), 2);
+    all_betas = all_betas(valid_idx,:);
+    sub_ids = sub_ids(valid_idx);
+    group_labels = string(group_labels(valid_idx));
+
+    % =============== Habituation ========================================
+    hab.bird   = all_betas(:,1) - all_betas(:,4);
+    hab.spider = all_betas(:,5) - all_betas(:,8);
+
+    % =============== Gruppentrennung ====================================
+    is_rTMS    = group_labels == "rTMS";
+    is_Placebo = group_labels == "Placebo";
+
+    b_bird   = all_betas(:,1:4);
+    b_spider = all_betas(:,5:8);
+
+    m_bird_rTMS      = mean(b_bird(is_rTMS,:),1);
+    m_spider_rTMS    = mean(b_spider(is_rTMS,:),1);
+    m_bird_Placebo   = mean(b_bird(is_Placebo,:),1);
+    m_spider_Placebo = mean(b_spider(is_Placebo,:),1);
+
+    sem_bird_rTMS      = std(b_bird(is_rTMS,:),0,1) ./ sqrt(sum(is_rTMS));
+    sem_spider_rTMS    = std(b_spider(is_rTMS,:),0,1) ./ sqrt(sum(is_rTMS));
+    sem_bird_Placebo   = std(b_bird(is_Placebo,:),0,1) ./ sqrt(sum(is_Placebo));
+    sem_spider_Placebo = std(b_spider(is_Placebo,:),0,1) ./ sqrt(sum(is_Placebo));
+
+    % =============== Plot speichern =====================================
+    figure('Visible','off');
+    hold on;
+
+    errorbar(1:4, m_bird_rTMS, sem_bird_rTMS, '-o', ...
+        'Color', [0.4 0.6 1], 'LineWidth', 1.5, 'DisplayName','Bird – rTMS');
+    errorbar(1:4, m_spider_rTMS, sem_spider_rTMS, '-o', ...
+        'Color', [0 0 0.8], 'LineWidth', 1.5, 'DisplayName','Spider – rTMS');
+    errorbar(1:4, m_bird_Placebo, sem_bird_Placebo, '-o', ...
+        'Color', [1 0.6 0.6], 'LineWidth', 1.5, 'DisplayName','Bird – Placebo');
+    errorbar(1:4, m_spider_Placebo, sem_spider_Placebo, '-o', ...
+        'Color', [0.8 0 0], 'LineWidth', 1.5, 'DisplayName','Spider – Placebo');
+
+    xlabel('Block');
+    ylabel('Beta');
+    title(sprintf('%s – Spider vs. Bird (T4)', strrep(roi_name,'_','\_')));
+    legend('Location','northeastoutside');
+    xticks(1:4); grid on;
+
+    saveas(gcf, fullfile(plot_dir, sprintf('%s_T4_plot.png', roi_name)));
+    close(gcf);
+
+    % =============== Ergebnisse speichern ===============================
+    % Mittelwerte der Habituation
+    mean_hab_bird = mean(hab.bird, 'omitnan');
+    mean_hab_spider = mean(hab.spider, 'omitnan');
+
+    % In Ergebnisliste schreiben
+    result_row = {roi_name, mean_hab_bird, mean_hab_spider, ...
+                  sum(is_rTMS), sum(is_Placebo)};
+    all_results = [all_results; result_row];
+
+    % =============== Einzel-CSV pro ROI speichern =======================
+    T = table(sub_ids', group_labels', ...
+        hab.bird, hab.spider, ...
+        'VariableNames', {'Subject', 'Group', 'Hab_Bird', 'Hab_Spider'});
+
+    beta_tbl = array2table(all_betas, ...
+        'VariableNames', {'bird1','bird2','bird3','bird4', ...
+                          'spider1','spider2','spider3','spider4'});
+
+    T = [T beta_tbl];
+    output_table = fullfile(base_dir, sprintf('%s_BlockBetas_T4.csv', roi_name));
+    writetable(T, output_table);
 end
 
-% === Z-Transformation ====================================================
-all_betas_thalamus_R_z = zscore(all_betas_thalamus_R, 0, 2);
+% =============== Gesamttabelle speichern ================================
+header = {'ROI', 'Mean_Hab_Bird', 'Mean_Hab_Spider', 'n_rTMS', 'n_Placebo'};
+T_all = cell2table(all_results, 'VariableNames', header);
+csv_output = fullfile(base_dir, 'Alle_ROIs_T4_Habituation_Gruppe.csv');
+writetable(T_all, csv_output);
 
-% === Habituation (Block 1 – Block 4) =====================================
-habituation_thalamus_R.bird   = all_betas_thalamus_R(:,1) - all_betas_thalamus_R(:,4);
-habituation_thalamus_R.spider = all_betas_thalamus_R(:,5) - all_betas_thalamus_R(:,8);
-habituation_thalamus_R_z.bird   = all_betas_thalamus_R_z(:,1) - all_betas_thalamus_R_z(:,4);
-habituation_thalamus_R_z.spider = all_betas_thalamus_R_z(:,5) - all_betas_thalamus_R_z(:,8);
-
-% === Nur gültige Einträge weiterverwenden ================================
-valid_idx = all(~isnan(all_betas_thalamus_R), 2);
-group_labels = string(group_labels);
-sub_ids = sub_ids(valid_idx);
-group_labels = group_labels(valid_idx);
-all_betas_thalamus_R = all_betas_thalamus_R(valid_idx, :);
-habituation_thalamus_R.bird   = habituation_thalamus_R.bird(valid_idx);
-habituation_thalamus_R.spider = habituation_thalamus_R.spider(valid_idx);
-
-% === Gruppentrennung =====================================================
-is_rTMS    = group_labels == "rTMS";
-is_Placebo = group_labels == "Placebo";
-
-% === Gruppenspezifische Mittelwerte & SEM ================================
-b_bird   = all_betas_thalamus_R(:, 1:4);
-b_spider = all_betas_thalamus_R(:, 5:8);
-
-m_bird_rTMS      = mean(b_bird(is_rTMS,:),1);
-m_spider_rTMS    = mean(b_spider(is_rTMS,:),1);
-m_bird_Placebo   = mean(b_bird(is_Placebo,:),1);
-m_spider_Placebo = mean(b_spider(is_Placebo,:),1);
-
-sem_bird_rTMS      = std(b_bird(is_rTMS,:),0,1) ./ sqrt(sum(is_rTMS));
-sem_spider_rTMS    = std(b_spider(is_rTMS,:),0,1) ./ sqrt(sum(is_rTMS));
-sem_bird_Placebo   = std(b_bird(is_Placebo,:),0,1) ./ sqrt(sum(is_Placebo));
-sem_spider_Placebo = std(b_spider(is_Placebo,:),0,1) ./ sqrt(sum(is_Placebo));
-
-% === Plot: Farblich getrennt nach Gruppen ================================
-figure;
-hold on;
-
-% Farben definieren (RGB)
-color_bird_rTMS      = [0.4 0.6 1];   % hellblau
-color_spider_rTMS    = [0 0 0.8];     % dunkelblau
-color_bird_Placebo   = [1 0.6 0.6];   % hellrot
-color_spider_Placebo = [0.8 0 0];     % dunkelrot
-
-% Linien plotten
-errorbar(1:4, m_bird_rTMS, sem_bird_rTMS, '-o', ...
-    'Color', color_bird_rTMS, 'LineWidth', 1.5, 'DisplayName','Bird – rTMS');
-
-errorbar(1:4, m_spider_rTMS, sem_spider_rTMS, '-o', ...
-    'Color', color_spider_rTMS, 'LineWidth', 1.5, 'DisplayName','Spider – rTMS');
-
-errorbar(1:4, m_bird_Placebo, sem_bird_Placebo, '-o', ...
-    'Color', color_bird_Placebo, 'LineWidth', 1.5, 'DisplayName','Bird – Placebo');
-
-errorbar(1:4, m_spider_Placebo, sem_spider_Placebo, '-o', ...
-    'Color', color_spider_Placebo, 'LineWidth', 1.5, 'DisplayName','Spider – Placebo');
-
-xlabel('Block');
-ylabel('Beta');
-title('Thalamus R – Spider vs. Bird (T4, farblich: rTMS vs. Placebo)');
-legend('Location','northeastoutside');
-xticks(1:4);
-grid on;
-
-% === Export: Tabelle mit Gruppenzuordnung ================================
-T = table(sub_ids', group_labels', ...
-    habituation_thalamus_R.bird, habituation_thalamus_R.spider, ...
-    'VariableNames', {'Subject', 'Group', 'Hab_ThalamusR_Bird', 'Hab_ThalamusR_Spider'});
-
-beta_tbl = array2table(all_betas_thalamus_R, ...
-    'VariableNames', {'bird1_ThalamusR','bird2_ThalamusR','bird3_ThalamusR','bird4_ThalamusR', ...
-                      'spider1_ThalamusR','spider2_ThalamusR','spider3_ThalamusR','spider4_ThalamusR'});
-
-T = [T beta_tbl];
-output_file = fullfile(base_dir, 'ThalamusR_BlockBetas_T4_Gruppen.csv');
-writetable(T, output_file);
-fprintf('\n>>> Ergebnisse gespeichert: %s\n', output_file);
-
-% === Kontroll-Mittelwerte ================================================
-fprintf('\n=== HABITUATION (Block1 – Block4): Mittelwerte (Rohdaten) – Thalamus R ===\n');
-fprintf('Thalamus R:\n  Bird:   %.3f\n  Spider: %.3f\n', ...
-    mean(habituation_thalamus_R.bird, 'omitnan'), ...
-    mean(habituation_thalamus_R.spider, 'omitnan'));
+fprintf('\n>>> Alle Ergebnisse gespeichert: %s\n', csv_output);
+fprintf('>>> Alle Plots gespeichert in: %s\n', plot_dir);
