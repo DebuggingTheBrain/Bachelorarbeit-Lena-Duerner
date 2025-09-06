@@ -1,13 +1,13 @@
 clear;
 clc;
 
-% =============== Pfade ===================================================
+% ==================== Pfade ====================
 base_dir  = 'F:\FMRIPREPRESULTFINAL';
 roi_dir   = fullfile(base_dir, 'ROIs_2_mni2009cKopie');
 plot_dir  = fullfile(base_dir, 'ROI_Plots_T4');
 if ~exist(plot_dir, 'dir'), mkdir(plot_dir); end
 
-% =============== Gruppenzuordnung ========================================
+% ==================== Gruppenzuordnung ====================
 group_map = containers.Map( ...
     {'sub-SM2VP007','sub-SM2VP010','sub-SM2VP011','sub-SM2VP012','sub-SM2VP017','sub-SM2VP023', ...
      'sub-SM2VP025','sub-SM2VP033','sub-SM2VP034','sub-SM2VP035','sub-SM2VP039','sub-SM2VP040', ...
@@ -22,7 +22,7 @@ group_map = containers.Map( ...
 subs = dir(fullfile(base_dir, 'sub-*'));
 subs = subs([subs.isdir]);
 
-% =============== Alle ROIs laden =========================================
+% ==================== ROIs laden ====================
 roi_files = dir(fullfile(roi_dir, '*_in_MNI2009c.nii'));
 all_results = [];
 
@@ -75,7 +75,6 @@ for r = 1:numel(roi_files)
         end
     end
 
-    % =============== Datenbereinigung ===================================
     if isempty(all_betas)
         continue;
     end
@@ -86,60 +85,66 @@ for r = 1:numel(roi_files)
     sub_ids = sub_ids(valid_idx);
     group_labels = string(group_labels(valid_idx));
 
-    % =============== Habituation ========================================
-    hab.bird   = all_betas(:,1) - all_betas(:,4);
-    hab.spider = all_betas(:,5) - all_betas(:,8);
-
-    % =============== Gruppentrennung ====================================
+    % ==================== Gruppierung ====================
     is_rTMS    = group_labels == "rTMS";
     is_Placebo = group_labels == "Placebo";
 
-    b_bird   = all_betas(:,1:4);
-    b_spider = all_betas(:,5:8);
+    b_rTMS = all_betas(is_rTMS,:);
+    b_Placebo = all_betas(is_Placebo,:);
 
-    m_bird_rTMS      = mean(b_bird(is_rTMS,:),1);
-    m_spider_rTMS    = mean(b_spider(is_rTMS,:),1);
-    m_bird_Placebo   = mean(b_bird(is_Placebo,:),1);
-    m_spider_Placebo = mean(b_spider(is_Placebo,:),1);
+    % ==================== Habituation ====================
+    hab.bird   = all_betas(:,1) - all_betas(:,4);
+    hab.spider = all_betas(:,5) - all_betas(:,8);
 
-    sem_bird_rTMS      = std(b_bird(is_rTMS,:),0,1) ./ sqrt(sum(is_rTMS));
-    sem_spider_rTMS    = std(b_spider(is_rTMS,:),0,1) ./ sqrt(sum(is_rTMS));
-    sem_bird_Placebo   = std(b_bird(is_Placebo,:),0,1) ./ sqrt(sum(is_Placebo));
-    sem_spider_Placebo = std(b_spider(is_Placebo,:),0,1) ./ sqrt(sum(is_Placebo));
+    hab_rTMS.bird   = b_rTMS(:,1) - b_rTMS(:,4);
+    hab_rTMS.spider = b_rTMS(:,5) - b_rTMS(:,8);
 
-    % =============== Plot speichern =====================================
-    figure('Visible','off');
-    hold on;
+    hab_Placebo.bird   = b_Placebo(:,1) - b_Placebo(:,4);
+    hab_Placebo.spider = b_Placebo(:,5) - b_Placebo(:,8);
 
-    errorbar(1:4, m_bird_rTMS, sem_bird_rTMS, '-o', ...
-        'Color', [0.4 0.6 1], 'LineWidth', 1.5, 'DisplayName','Bird – rTMS');
-    errorbar(1:4, m_spider_rTMS, sem_spider_rTMS, '-o', ...
-        'Color', [0 0 0.8], 'LineWidth', 1.5, 'DisplayName','Spider – rTMS');
-    errorbar(1:4, m_bird_Placebo, sem_bird_Placebo, '-o', ...
-        'Color', [1 0.6 0.6], 'LineWidth', 1.5, 'DisplayName','Bird – Placebo');
-    errorbar(1:4, m_spider_Placebo, sem_spider_Placebo, '-o', ...
-        'Color', [0.8 0 0], 'LineWidth', 1.5, 'DisplayName','Spider – Placebo');
+    % ==================== Z-Standardisierung ====================
+    z_rTMS = zscore(b_rTMS, 0, 2);
+    z_Placebo = zscore(b_Placebo, 0, 2);
 
-    xlabel('Block');
-    ylabel('Beta');
-    title(sprintf('%s – Spider vs. Bird (T4)', strrep(roi_name,'_','\_')));
-    legend('Location','northeastoutside');
-    xticks(1:4); grid on;
+    hab_rTMS_z.bird   = z_rTMS(:,1) - z_rTMS(:,4);
+    hab_rTMS_z.spider = z_rTMS(:,5) - z_rTMS(:,8);
+    hab_Placebo_z.bird   = z_Placebo(:,1) - z_Placebo(:,4);
+    hab_Placebo_z.spider = z_Placebo(:,5) - z_Placebo(:,8);
 
-    saveas(gcf, fullfile(plot_dir, sprintf('%s_T4_plot.png', roi_name)));
-    close(gcf);
+    % ==================== Statistische Tests ====================
+    [~, p_rTMS_spider, ~, s_rTMS_spider]       = ttest(hab_rTMS.spider);
+    [~, p_rTMS_bird, ~, s_rTMS_bird]           = ttest(hab_rTMS.bird);
+    [~, p_Placebo_spider, ~, s_Placebo_spider] = ttest(hab_Placebo.spider);
+    [~, p_Placebo_bird, ~, s_Placebo_bird]     = ttest(hab_Placebo.bird);
 
-    % =============== Ergebnisse speichern ===============================
-    % Mittelwerte der Habituation
-    mean_hab_bird = mean(hab.bird, 'omitnan');
-    mean_hab_spider = mean(hab.spider, 'omitnan');
+    [~, p_diff_rTMS, ~, s_diff_rTMS]         = ttest(hab_rTMS.spider, hab_rTMS.bird);
+    [~, p_diff_Placebo, ~, s_diff_Placebo]   = ttest(hab_Placebo.spider, hab_Placebo.bird);
 
-    % In Ergebnisliste schreiben
-    result_row = {roi_name, mean_hab_bird, mean_hab_spider, ...
-                  sum(is_rTMS), sum(is_Placebo)};
+    [~, p_rTMS_spider_z, ~, s_rTMS_spider_z]       = ttest(hab_rTMS_z.spider);
+    [~, p_rTMS_bird_z, ~, s_rTMS_bird_z]           = ttest(hab_rTMS_z.bird);
+    [~, p_Placebo_spider_z, ~, s_Placebo_spider_z] = ttest(hab_Placebo_z.spider);
+    [~, p_Placebo_bird_z, ~, s_Placebo_bird_z]     = ttest(hab_Placebo_z.bird);
+
+    % ==================== Ergebnisse sammeln ====================
+    result_row = {
+        roi_name, ...
+        mean(hab.bird), mean(hab.spider), ...
+        sum(is_rTMS), sum(is_Placebo), ...
+        s_rTMS_spider.df, s_rTMS_spider.tstat, p_rTMS_spider, ...
+        s_rTMS_bird.df,   s_rTMS_bird.tstat,   p_rTMS_bird, ...
+        s_diff_rTMS.df,   s_diff_rTMS.tstat,   p_diff_rTMS, ...
+        s_Placebo_spider.df, s_Placebo_spider.tstat, p_Placebo_spider, ...
+        s_Placebo_bird.df,   s_Placebo_bird.tstat,   p_Placebo_bird, ...
+        s_diff_Placebo.df,   s_diff_Placebo.tstat,   p_diff_Placebo, ...
+        s_rTMS_spider_z.tstat, p_rTMS_spider_z, ...
+        s_rTMS_bird_z.tstat,   p_rTMS_bird_z, ...
+        s_Placebo_spider_z.tstat, p_Placebo_spider_z, ...
+        s_Placebo_bird_z.tstat,   p_Placebo_bird_z
+    };
+
     all_results = [all_results; result_row];
 
-    % =============== Einzel-CSV pro ROI speichern =======================
+    % ==================== Einzel-CSV pro ROI ====================
     T = table(sub_ids', group_labels', ...
         hab.bird, hab.spider, ...
         'VariableNames', {'Subject', 'Group', 'Hab_Bird', 'Hab_Spider'});
@@ -151,13 +156,49 @@ for r = 1:numel(roi_files)
     T = [T beta_tbl];
     output_table = fullfile(base_dir, sprintf('%s_BlockBetas_T4.csv', roi_name));
     writetable(T, output_table);
+
+    % ==================== Plot speichern ====================
+    figure('Visible','off');
+    hold on;
+
+    errorbar(1:4, mean(b_rTMS(:,1:4),1), std(b_rTMS(:,1:4),0,1)/sqrt(sum(is_rTMS)), '-o', 'Color', [0.4 0.6 1], 'DisplayName','Bird – rTMS');
+    errorbar(1:4, mean(b_rTMS(:,5:8),1), std(b_rTMS(:,5:8),0,1)/sqrt(sum(is_rTMS)), '-o', 'Color', [0 0 0.8], 'DisplayName','Spider – rTMS');
+    errorbar(1:4, mean(b_Placebo(:,1:4),1), std(b_Placebo(:,1:4),0,1)/sqrt(sum(is_Placebo)), '-o', 'Color', [1 0.6 0.6], 'DisplayName','Bird – Placebo');
+    errorbar(1:4, mean(b_Placebo(:,5:8),1), std(b_Placebo(:,5:8),0,1)/sqrt(sum(is_Placebo)), '-o', 'Color', [0.8 0 0], 'DisplayName','Spider – Placebo');
+
+    xlabel('Block');
+    ylabel('Beta');
+    title(sprintf('%s – Spider vs. Bird (T4)', strrep(roi_name,'_','\_')));
+    legend('Location','northeastoutside');
+    xticks(1:4); grid on;
+
+    saveas(gcf, fullfile(plot_dir, sprintf('%s_T4_plot.png', roi_name)));
+    close(gcf);
 end
 
-% =============== Gesamttabelle speichern ================================
-header = {'ROI', 'Mean_Hab_Bird', 'Mean_Hab_Spider', 'n_rTMS', 'n_Placebo'};
+% ==================== Gesamttabelle speichern ====================
+header = {
+    'ROI', 'Mean_Hab_Bird', 'Mean_Hab_Spider', ...
+    'n_rTMS', 'n_Placebo', ...
+    'df_rTMS_spider', 't_rTMS_spider', 'p_rTMS_spider', ...
+    'df_rTMS_bird',   't_rTMS_bird',   'p_rTMS_bird', ...
+    'df_rTMS_diff',   't_rTMS_diff',   'p_rTMS_diff', ...
+    'df_Placebo_spider', 't_Placebo_spider', 'p_Placebo_spider', ...
+    'df_Placebo_bird',   't_Placebo_bird',   'p_Placebo_bird', ...
+    'df_Placebo_diff',   't_Placebo_diff',   'p_Placebo_diff', ...
+    't_rTMS_spider_z', 'p_rTMS_spider_z', ...
+    't_rTMS_bird_z',   'p_rTMS_bird_z', ...
+    't_Placebo_spider_z', 'p_Placebo_spider_z', ...
+    't_Placebo_bird_z',   'p_Placebo_bird_z'
+};
+
 T_all = cell2table(all_results, 'VariableNames', header);
 csv_output = fullfile(base_dir, 'Alle_ROIs_T4_Habituation_Gruppe.csv');
 writetable(T_all, csv_output);
+
+fprintf('\n>>> Alle Ergebnisse gespeichert: %s\n', csv_output);
+fprintf('>>> Alle Plots gespeichert in: %s\n', plot_dir);
+
 
 fprintf('\n>>> Alle Ergebnisse gespeichert: %s\n', csv_output);
 fprintf('>>> Alle Plots gespeichert in: %s\n', plot_dir);
