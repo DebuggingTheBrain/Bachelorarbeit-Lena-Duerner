@@ -1,159 +1,144 @@
-% ========================================================================
-% Amygdala-Beta-Extraktion (pro Block, rechte Hemisphäre, T1)
-% ========================================================================
 clear;
 clc;
 
+% =========================== Pfade ============================
 base_dir = 'F:\FMRIPREPRESULTFINAL';
-roi_R = fullfile(base_dir, 'ROIs_2_mni2009c', 'Amygdala_R_in_MNI2009c.nii');
+roi_dir  = fullfile(base_dir, 'ROIs_2_mni2009cKopie');
+plot_dir = fullfile(base_dir, 'ROI_Plots');
+if ~exist(plot_dir, 'dir'), mkdir(plot_dir); end
 
 subs = dir(fullfile(base_dir, 'sub-*'));
 subs = subs([subs.isdir]);
 
-all_betas_R = [];
-sub_ids = {};
+% Alle ROI-Dateien laden
+roi_files = dir(fullfile(roi_dir, '*_in_MNI2009c.nii'));
 
-for i = 1:numel(subs)
-    sub = subs(i).name;
-    spm_path = fullfile(base_dir, sub, 'ses-T1', 'FL_blöcke', 'SPM.mat');
+% Ergebnisliste initialisieren
+all_results = [];
 
-    if ~exist(spm_path, 'file')
-        warning('SPM.mat fehlt: %s', spm_path); continue;
-    end
+for r = 1:numel(roi_files)
+    roi_file = fullfile(roi_dir, roi_files(r).name);
+    roi_name = erase(roi_files(r).name, '_in_MNI2009c.nii');
 
-    try
-        load(spm_path);
-        V = SPM.xY.VY;
-        names = SPM.xX.name;
+    fprintf('\n==============================\n');
+    fprintf('ROI: %s\n', roi_name);
+    fprintf('==============================\n');
 
-        idx_bird = find(contains(names, 'bird'));
-        idx_spider = find(contains(names, 'spider'));
+    all_betas = [];
+    sub_ids = {};
 
-        if numel(idx_bird) ~= 4 || numel(idx_spider) ~= 4
-            warning('Nicht exakt 4 bird/spider Betas bei %s – wird übersprungen.', sub);
-            continue;
+    for i = 1:numel(subs)
+        sub = subs(i).name;
+        spm_path = fullfile(base_dir, sub, 'ses-T1', 'FL_blöcke', 'SPM.mat');
+
+        if ~exist(spm_path, 'file')
+            warning('SPM.mat fehlt: %s', spm_path); continue;
         end
 
-        betas = cellstr(spm_select('FPList', fileparts(spm_path), '^beta_.*\.nii$'));
+        try
+            load(spm_path);
+            names = SPM.xX.name;
 
-        for b = 1:4
-            betaR_bird(b)   = spm_summarise(betas{idx_bird(b)}, roi_R, @mean);
-            betaR_spider(b) = spm_summarise(betas{idx_spider(b)}, roi_R, @mean);
+            idx_bird = find(contains(names, 'bird'));
+            idx_spider = find(contains(names, 'spider'));
+
+            if numel(idx_bird) ~= 4 || numel(idx_spider) ~= 4
+                warning('Nicht exakt 4 bird/spider Betas bei %s – übersprungen.', sub);
+                continue;
+            end
+
+            betas = cellstr(spm_select('FPList', fileparts(spm_path), '^beta_.*\.nii$'));
+
+            for b = 1:4
+                beta_bird(b)   = spm_summarise(betas{idx_bird(b)}, roi_file, @mean);
+                beta_spider(b) = spm_summarise(betas{idx_spider(b)}, roi_file, @mean);
+            end
+
+            all_betas(end+1,:) = [beta_bird beta_spider];
+            sub_ids{end+1} = sub;
+
+        catch ME
+            warning('Fehler bei %s: %s', sub, ME.message);
         end
-
-        all_betas_R(end+1,:) = [betaR_bird betaR_spider];
-        sub_ids{end+1} = sub;
-
-    catch ME
-        warning('Fehler bei %s: %s', sub, ME.message);
     end
+
+    if isempty(all_betas)
+        warning('Keine Daten für ROI %s vorhanden. Überspringe.', roi_name);
+        continue;
+    end
+
+    all_betas_z = zscore(all_betas, 0, 2);
+
+    % Habituation
+    hab.bird   = all_betas(:,1) - all_betas(:,4);
+    hab.spider = all_betas(:,5) - all_betas(:,8);
+    hab_z.bird   = all_betas_z(:,1) - all_betas_z(:,4);
+    hab_z.spider = all_betas_z(:,5) - all_betas_z(:,8);
+
+    % Statistische Tests
+    [~, p1, ~, s1] = ttest(hab.spider);
+    [~, p2, ~, s2] = ttest(hab.bird);
+    [~, p3, ~, s3] = ttest(hab.spider, hab.bird);
+
+    [~, p1z, ~, s1z] = ttest(hab_z.spider);
+    [~, p2z, ~, s2z] = ttest(hab_z.bird);
+    [~, p3z, ~, s3z] = ttest(hab_z.spider, hab_z.bird);
+
+    [~, p_block2, ~, stats_block2] = ttest(all_betas(:,6), all_betas(:,2));
+
+    % Ergebnisse speichern
+    result_row = {
+        roi_name, ...
+        s1.df, s1.tstat, p1, ...
+        s2.df, s2.tstat, p2, ...
+        s3.df, s3.tstat, p3, ...
+        s1z.df, s1z.tstat, p1z, ...
+        s2z.df, s2z.tstat, p2z, ...
+        s3z.df, s3z.tstat, p3z, ...
+        stats_block2.df, stats_block2.tstat, p_block2
+    };
+
+    all_results = [all_results; result_row];
+
+    % =================== Plot: Verlauf über Blöcke ===================
+    b_bird = all_betas(:,1:4);
+    b_spider = all_betas(:,5:8);
+    m_bird = mean(b_bird,1);
+    m_spider = mean(b_spider,1);
+    sem_bird = std(b_bird,0,1) ./ sqrt(size(b_bird,1));
+    sem_spider = std(b_spider,0,1) ./ sqrt(size(b_spider,1));
+
+    figure('Visible', 'off'); % kein GUI-Fenster anzeigen
+    hold on;
+    errorbar(1:4, m_bird, sem_bird, '-o', 'DisplayName','Bird');
+    errorbar(1:4, m_spider, sem_spider, '-o', 'DisplayName','Spider');
+    xlabel('Block');
+    ylabel('Beta');
+    title(sprintf('%s – Spider vs. Bird', strrep(roi_name, '_', '\_')));
+    legend;
+    xticks(1:4);
+    grid on;
+
+    % Grafik speichern
+    fig_filename = fullfile(plot_dir, sprintf('%s_plot.png', roi_name));
+    saveas(gcf, fig_filename);
+    close(gcf);
 end
 
-% =========================================================================
-% Z-TRANSFORMATION innerhalb der Subjekte
-% =========================================================================
-all_betas_R_z = zscore(all_betas_R, 0, 2);
+% =================== CSV speichern ===================
+header = {
+    'ROI', ...
+    'df_hab_spider', 't_hab_spider', 'p_hab_spider', ...
+    'df_hab_bird',   't_hab_bird',   'p_hab_bird', ...
+    'df_diff',       't_diff',       'p_diff', ...
+    'df_hab_spider_z', 't_hab_spider_z', 'p_hab_spider_z', ...
+    'df_hab_bird_z',   't_hab_bird_z',   'p_hab_bird_z', ...
+    'df_diff_z',       't_diff_z',       'p_diff_z', ...
+    'df_block2',     't_block2',     'p_block2'
+};
 
-% =========================================================================
-% HABITUATION (Block1 – Block4)
-% =========================================================================
-habituation_R.bird   = all_betas_R(:,1) - all_betas_R(:,4);
-habituation_R.spider = all_betas_R(:,5) - all_betas_R(:,8);
-habituation_R_z.bird   = all_betas_R_z(:,1) - all_betas_R_z(:,4);
-habituation_R_z.spider = all_betas_R_z(:,5) - all_betas_R_z(:,8);
-
-% =========================================================================
-% HABITUATION: Statistische Tests
-% =========================================================================
-fprintf('\n=== STATISTISCHE TESTS: Habituation (Block1 > Block4) ===\n');
-
-fprintf('\n>> Rohdaten:\n');
-[~, p_r_spider, ~, stats_r_spider] = ttest(habituation_R.spider);
-[~, p_r_bird,   ~, stats_r_bird]   = ttest(habituation_R.bird);
-
-fprintf('Rechts Spider: t(%d) = %.2f, p = %.4f\n', stats_r_spider.df, stats_r_spider.tstat, p_r_spider);
-fprintf('Rechts Bird:   t(%d) = %.2f, p = %.4f\n', stats_r_bird.df, stats_r_bird.tstat, p_r_bird);
-
-fprintf('\n>> Z-transformiert:\n');
-[~, p_rz_spider, ~, stats_rz_spider] = ttest(habituation_R_z.spider);
-[~, p_rz_bird,   ~, stats_rz_bird]   = ttest(habituation_R_z.bird);
-
-fprintf('Rechts Spider z: t(%d) = %.2f, p = %.4f\n', stats_rz_spider.df, stats_rz_spider.tstat, p_rz_spider);
-fprintf('Rechts Bird z:   t(%d) = %.2f, p = %.4f\n', stats_rz_bird.df, stats_rz_bird.tstat, p_rz_bird);
-
-% =========================================================================
-% VERGLEICH Spider vs. Bird (Habituation)
-% =========================================================================
-fprintf('\n=== VERGLEICH Spider vs. Bird (Habituation) ===\n');
-
-% Rohdaten
-[~, p_r_diff, ~, stats_r_diff] = ttest(habituation_R.spider, habituation_R.bird);
-fprintf('Rechts roh: Spider > Bird: t(%d) = %.2f, p = %.4f\n', stats_r_diff.df, stats_r_diff.tstat, p_r_diff);
-
-% Z-transformiert
-[~, p_rz_diff, ~, stats_rz_diff] = ttest(habituation_R_z.spider, habituation_R_z.bird);
-fprintf('Rechts z: Spider > Bird: t(%d) = %.2f, p = %.4f\n', stats_rz_diff.df, stats_rz_diff.tstat, p_rz_diff);
-
-% =========================================================================
-% BLOCK 2: Spider vs. Bird
-% =========================================================================
-beta_block2_spider = all_betas_R(:,6); % Spider Block 2 (rechte Amygdala)
-beta_block2_bird   = all_betas_R(:,2); % Bird Block 2 (rechte Amygdala)
-[~, p_block2, ~, stats_block2] = ttest(beta_block2_spider, beta_block2_bird);
-
-fprintf('\n=== BLOCK 2: Spider > Bird (rechte Amygdala) ===\n');
-fprintf('t(%d) = %.2f, p = %.4f\n', stats_block2.df, stats_block2.tstat, p_block2);
-
-% Bonferroni-Korrektur (optional)
-n_tests = 4; % z.B. wenn du 4 Blockvergleiche durchführst
-alpha_bonf = 0.05 / n_tests;
-fprintf('Bonferroni-korrigiertes Alpha für %d Tests: %.4f\n', n_tests, alpha_bonf);
-if p_block2 < alpha_bonf
-    fprintf('Der Effekt bleibt nach Korrektur signifikant ✅\n');
-else
-    fprintf('Der Effekt ist nach Korrektur nicht signifikant ❌\n');
-end
-
-% =========================================================================
-% PLOT: Verlauf über 4 Blöcke (rechte Amygdala)
-% =========================================================================
-figure;
-b_bird  = all_betas_R(:,1:4);
-b_spider = all_betas_R(:,5:8);
-m_bird = mean(b_bird,1);
-m_spider = mean(b_spider,1);
-sem_bird = std(b_bird,0,1) ./ sqrt(size(b_bird,1));
-sem_spider = std(b_spider,0,1) ./ sqrt(size(b_spider,1));
-
-hold on;
-errorbar(1:4, m_bird, sem_bird, '-o', 'DisplayName','Bird');
-errorbar(1:4, m_spider, sem_spider, '-o', 'DisplayName','Spider');
-xlabel('Block');
-ylabel('Beta');
-title('Amygdala Rechts – Spider vs. Bird');
-legend;
-xticks(1:4);
-grid on;
-
-% =========================================================================
-% EXPORT: Tabelle mit Betas & Habituation
-% =========================================================================
-T = table(sub_ids', ...
-    habituation_R.bird, habituation_R.spider, ...
-    'VariableNames', {'Subject', 'Hab_R_Bird', 'Hab_R_Spider'});
-
-betaR_tbl = array2table(all_betas_R, ...
-    'VariableNames', {'bird1_R','bird2_R','bird3_R','bird4_R', ...
-                      'spider1_R','spider2_R','spider3_R','spider4_R'});
-
-T = [T betaR_tbl];
-output_file = fullfile(base_dir, 'Amygdala_BlockBetas_T1_RECHTS.csv');
-writetable(T, output_file);
-fprintf('\n>>> Ergebnisse gespeichert: %s\n', output_file);
-
-% =========================================================================
-% Mittelwerte zur Kontrolle
-% =========================================================================
-fprintf('\n=== HABITUATION (Block1 – Block4): Mittelwerte (Rohdaten) ===\n');
-fprintf('Amygdala Rechts:\n  Bird:   %.3f\n  Spider: %.3f\n', ...
-    mean(habituation_R.bird), mean(habituation_R.spider));
+T = cell2table(all_results, 'VariableNames', header);
+output_csv = fullfile(base_dir, 'Alle_ROI_Statistiken_T1.csv');
+writetable(T, output_csv);
+fprintf('\n>>> Alle Ergebnisse gespeichert in: %s\n', output_csv);
+fprintf('>>> Alle Plots gespeichert in: %s\n', plot_dir);
