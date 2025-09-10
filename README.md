@@ -34,12 +34,6 @@ Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren,
 ---
 
 
-## Inhaltsverzeichnis
-
-[Smoothing Script](03%20-%20Postprocessing/smoothing_scriptneu.m)
-
-
-
 
 
 
