@@ -3,11 +3,9 @@
 Willkommen auf dem offiziellen Repository meiner Bachelorarbeit im Studiengang **B.Sc. Psychologie** an der **Hamburger Fern-Hochschule**.
 
 In dieser Arbeit beschäftige ich mich mit dem Thema  
-**Reproduktion neurobiologischer Mechanismen bei erhöhter Spinnenangst im Rahmen einer subklinischen Studie**.  
+**Störung der Furchtrekonsolidierung mittels rTMS zur Beeinflussung des Furchtgedächtnisses**.  
 Ziel der Arbeit ist es,  
 *die Ergebnisse vorheriger Studien zur neurobiologischen Reaktion auf visuelle Spinnenreize zu reproduzieren und die zugrunde liegenden Mechanismen bei Personen mit erhöhter Spinnenangst (SPQ > 18) detailliert zu untersuchen.*  
-
-Der Fokus liegt darauf, Proband*innen mit erhöhter Spinnenangst zu analysieren, da diese spezifische Phobie sich besonders gut für die Erforschung der neurobiologischen Reaktion auf während des MRT gezeigte visuelle Stimuli (Spinnenbilder) eignet.
 
 
 ---
